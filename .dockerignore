@@ -1,0 +1,27 @@
+# Dependencies (reinstalled in container)
+node_modules
+.pnp
+.pnp.*
+.yarn*
+
+# Build output (rebuilt in container)
+.next
+out
+build
+
+# Git
+.git
+.gitignore
+
+# Env (inject at runtime or build-arg)
+.env*
+!.env.example
+
+# Misc
+Dockerfile
+.dockerignore
+*.md
+.DS_Store
+coverage
+*.log
+.vercel
