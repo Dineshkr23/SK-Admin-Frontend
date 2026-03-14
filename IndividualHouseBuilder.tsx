@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 const GOOGLE_GEOCODE_KEY = "AIzaSyDm7XyTys-cDc5ne0Poqhp1euERvFcMQGk";
+const SK_BACKEND_URL = "https://sk-backend.emovur.com";
 
 function IndHouseForm() {
   const [viewportWidth, setViewportWidth] = useState<number>(
@@ -470,16 +471,40 @@ function IndHouseForm() {
     });
 
     try {
-      const response = await fetch(
-        "https://api.sksupertmt.com/api/Registration/insertIndividualHousebuilder",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
+      const backendPayload = {
+        formType: "form_c" as const,
+        pi_firstName: payload.firstName,
+        pi_lastName: payload.lastName,
+        pi_profession: payload.profession || "Individual",
+        pi_phone: payload.phoneNumber,
+        pi_whatsAppNumber: payload.whatsAppNumber || undefined,
+        pi_emailId: payload.emailId || undefined,
+        pi_addressLane1: payload.addressLine1,
+        pi_addressLane2: payload.addressLine2 || undefined,
+        pi_city: payload.city,
+        pi_state: payload.state,
+        pi_pincode: payload.pincode,
+        ref_nameOfTheperson: payload.ref_nameOfTheperson,
+        ref_place: payload.ref_place,
+        shop_Address1: payload.shop_Address1,
+        shop_Address2: payload.shop_Address2 || undefined,
+        shop_City: payload.shop_City,
+        shop_District: payload.shop_District || undefined,
+        shop_Taluk: payload.shop_Taluk || undefined,
+        shop_Pincode: payload.shop_Pincode,
+        shop_Landmark: payload.shop_Landmark || undefined,
+        shop_location: payload.shop_location,
+        sod_nameOfTheDealer: payload.sod_nameOfTheDealer,
+        sod_place: payload.sod_place,
+      };
+
+      const response = await fetch(`${SK_BACKEND_URL}/form-submissions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify(backendPayload),
+      });
 
       const responseBody = (await response.json().catch(() => null)) as unknown;
       if (!response.ok) {
@@ -488,11 +513,14 @@ function IndHouseForm() {
         );
       }
 
+      const message =
+        extractApiMessage(responseBody) ||
+        (isRecord(responseBody) && typeof responseBody.skPassportNo === "string"
+          ? "Registration submitted successfully."
+          : "Registration submitted successfully.");
       setSubmitState({
         submitting: false,
-        status:
-          extractApiMessage(responseBody) ||
-          "Registration submitted successfully.",
+        status: message,
         isSuccess: true,
       });
     } catch (error) {

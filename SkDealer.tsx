@@ -48,6 +48,8 @@ type OfficePincodeLookupState = {
   isSuccess: boolean;
 };
 
+const SK_BACKEND_URL = "https://sk-backend.emovur.com";
+
 const createOtpState = (): OtpVerificationState => ({
   phoneNumber: "",
   token: "",
@@ -420,11 +422,49 @@ function SkDealer() {
     });
 
     try {
+      const backendPayload = {
+        formType: "form_d" as const,
+        pi_firstName: getFieldValue(formData, "contactPerson") || getFieldValue(formData, "dealershipName"),
+        pi_lastName: "",
+        pi_profession: getFieldValue(formData, "ownershipType") || "Proprietor",
+        pi_phone: getFieldValue(formData, "mobileNumber"),
+        pi_emailId: getFieldValue(formData, "emailId") || undefined,
+        pi_addressLane1: getFieldValue(formData, "officeAddressLine1"),
+        pi_addressLane2: getFieldValue(formData, "officeAddressLine2") || undefined,
+        pi_city: getFieldValue(formData, "city"),
+        pi_state: getFieldValue(formData, "state"),
+        pi_pincode: getFieldValue(formData, "postalCode") || undefined,
+        ref_nameOfTheperson: getFieldValue(formData, "salesOfficerName"),
+        ref_place: getFieldValue(formData, "salesOfficerContact"),
+        shop_Address1: getFieldValue(formData, "shopAddress1"),
+        shop_Address2: getFieldValue(formData, "shopAddress2") || undefined,
+        shop_District: getFieldValue(formData, "shopDistrict") || undefined,
+        shop_Taluk: getFieldValue(formData, "shopTaluk") || undefined,
+        shop_City: getFieldValue(formData, "shopCityTown"),
+        shop_Pincode: getFieldValue(formData, "shopPincode"),
+        shop_Landmark: getFieldValue(formData, "shopLandmark") || undefined,
+      };
+
+      const submitFormData = new FormData();
+      submitFormData.append("data", JSON.stringify(backendPayload));
+      const masonPhotoFile = formData.get("masonPhoto");
+      const masonIdProofFile = formData.get("masonIdProof");
+      const masonAddressProofBackFile = formData.get("masonAddressProofBack");
+      if (masonPhotoFile instanceof File && masonPhotoFile.size > 0) {
+        submitFormData.append("photoProof", masonPhotoFile);
+      }
+      if (masonIdProofFile instanceof File && masonIdProofFile.size > 0) {
+        submitFormData.append("idProof", masonIdProofFile);
+      }
+      if (masonAddressProofBackFile instanceof File && masonAddressProofBackFile.size > 0) {
+        submitFormData.append("idProofBack", masonAddressProofBackFile);
+      }
+
       const registerResponse = await fetch(
-        "https://api.sksupertmt.com/api/Registration/insertMasonAndBarbenders",
+        `${SK_BACKEND_URL}/form-submissions`,
         {
           method: "POST",
-          body: formData,
+          body: submitFormData,
         },
       );
 
@@ -434,29 +474,6 @@ function SkDealer() {
       if (!registerResponse.ok) {
         const message =
           extractApiMessage(registerBody) || "Unable to submit registration.";
-        throw new Error(message);
-      }
-
-      const emailFormData = new FormData();
-      formData.forEach((value, key) => {
-        emailFormData.append(key, value);
-      });
-
-      const emailResponse = await fetch(
-        "https://api.sksupertmt.com/api/Email/sendMasonRegisterBackEmail",
-        {
-          method: "POST",
-          body: emailFormData,
-        },
-      );
-
-      const emailBody = (await emailResponse
-        .json()
-        .catch(() => null)) as unknown;
-      if (!emailResponse.ok) {
-        const message =
-          extractApiMessage(emailBody) ||
-          "Registration saved, but email notification failed.";
         throw new Error(message);
       }
 

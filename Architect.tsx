@@ -44,6 +44,8 @@ type OfficePincodeLookupState = {
   isSuccess: boolean;
 };
 
+const SK_BACKEND_URL = "https://sk-backend.emovur.com";
+
 const createOtpState = (): OtpVerificationState => ({
   phoneNumber: "",
   token: "",
@@ -407,11 +409,49 @@ function Arch_Engi() {
     });
 
     try {
+      const backendPayload = {
+        formType: "form_e" as const,
+        pi_firstName: getFieldValue(formData, "firstName"),
+        pi_lastName: getFieldValue(formData, "lastName"),
+        pi_profession: getFieldValue(formData, "profession") || "Architect",
+        pi_dob: getFieldValue(formData, "dateOfBirth") || undefined,
+        pi_phone: getFieldValue(formData, "phoneNumber"),
+        pi_whatsAppNumber: getFieldValue(formData, "whatsappNumber") || undefined,
+        pi_emailId: getFieldValue(formData, "emailId") || undefined,
+        pi_addressLane1: getFieldValue(formData, "addressLine1"),
+        pi_addressLane2: getFieldValue(formData, "addressLine2") || undefined,
+        pi_city: getFieldValue(formData, "city"),
+        pi_state: getFieldValue(formData, "state"),
+        pi_anniversaryDate: getFieldValue(formData, "anniversaryDate") || undefined,
+        ref_nameOfTheperson: getFieldValue(formData, "salesOfficerName"),
+        ref_place: getFieldValue(formData, "salesOfficerContact"),
+        shop_Address1: getFieldValue(formData, "currentAddress1"),
+        shop_Address2: getFieldValue(formData, "currentAddress2") || undefined,
+        shop_District: getFieldValue(formData, "currentDistrict") || undefined,
+        shop_Taluk: getFieldValue(formData, "currentTaluk") || undefined,
+        shop_City: getFieldValue(formData, "currentCityTown"),
+        shop_Pincode: getFieldValue(formData, "currentPincode"),
+        shop_Landmark: getFieldValue(formData, "currentLandmark") || undefined,
+        sod_nameOfTheDealer: getFieldValue(formData, "dealerName"),
+        sod_place: getFieldValue(formData, "dealerPlace"),
+      };
+
+      const submitFormData = new FormData();
+      submitFormData.append("data", JSON.stringify(backendPayload));
+      const masonPhotoFile = formData.get("masonPhoto");
+      const masonIdProofFile = formData.get("masonIdProof");
+      if (masonPhotoFile instanceof File && masonPhotoFile.size > 0) {
+        submitFormData.append("photoProof", masonPhotoFile);
+      }
+      if (masonIdProofFile instanceof File && masonIdProofFile.size > 0) {
+        submitFormData.append("idProof", masonIdProofFile);
+      }
+
       const registerResponse = await fetch(
-        "https://api.sksupertmt.com/api/Registration/insertMasonAndBarbenders",
+        `${SK_BACKEND_URL}/form-submissions`,
         {
           method: "POST",
-          body: formData,
+          body: submitFormData,
         },
       );
 
@@ -421,29 +461,6 @@ function Arch_Engi() {
       if (!registerResponse.ok) {
         const message =
           extractApiMessage(registerBody) || "Unable to submit registration.";
-        throw new Error(message);
-      }
-
-      const emailFormData = new FormData();
-      formData.forEach((value, key) => {
-        emailFormData.append(key, value);
-      });
-
-      const emailResponse = await fetch(
-        "https://api.sksupertmt.com/api/Email/sendMasonRegisterBackEmail",
-        {
-          method: "POST",
-          body: emailFormData,
-        },
-      );
-
-      const emailBody = (await emailResponse
-        .json()
-        .catch(() => null)) as unknown;
-      if (!emailResponse.ok) {
-        const message =
-          extractApiMessage(emailBody) ||
-          "Registration saved, but email notification failed.";
         throw new Error(message);
       }
 

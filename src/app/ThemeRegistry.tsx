@@ -72,21 +72,6 @@ const theme = createTheme({
         },
       },
     },
-    MuiDataGrid: {
-      styleOverrides: {
-        root: {
-          border: "1px solid #eaecf0",
-          borderRadius: 10,
-          "& .MuiDataGrid-columnHeaders": {
-            backgroundColor: "rgb(248, 250, 252)",
-            borderBottom: "1px solid #d0d5dd",
-          },
-          "& .MuiDataGrid-cell": {
-            borderColor: "#eaecf0",
-          },
-        },
-      },
-    },
   },
 });
 
