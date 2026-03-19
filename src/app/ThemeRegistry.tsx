@@ -2,6 +2,8 @@
 
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
+import { LocalizationProvider } from "@mui/x-date-pickers";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 
 const theme = createTheme({
   palette: {
@@ -82,8 +84,10 @@ export default function ThemeRegistry({
 }) {
   return (
     <ThemeProvider theme={theme}>
-      <CssBaseline />
-      {children}
+      <LocalizationProvider dateAdapter={AdapterDayjs}>
+        <CssBaseline />
+        {children}
+      </LocalizationProvider>
     </ThemeProvider>
   );
 }

@@ -410,7 +410,7 @@ function Arch_Engi() {
 
     try {
       const backendPayload = {
-        formType: "form_e" as const,
+        formType: "architectEngineer" as const,
         pi_firstName: getFieldValue(formData, "firstName"),
         pi_lastName: getFieldValue(formData, "lastName"),
         pi_profession: getFieldValue(formData, "profession") || "Architect",
@@ -423,8 +423,12 @@ function Arch_Engi() {
         pi_city: getFieldValue(formData, "city"),
         pi_state: getFieldValue(formData, "state"),
         pi_anniversaryDate: getFieldValue(formData, "anniversaryDate") || undefined,
+          validationCode: getFieldValue(formData, "validationCode") || undefined,
+          sameAsAbove: formData.get("sameAsAbove") === "on",
+          remarks: getFieldValue(formData, "remarks") || undefined,
         ref_nameOfTheperson: getFieldValue(formData, "salesOfficerName"),
         ref_place: getFieldValue(formData, "salesOfficerContact"),
+        reporting_manager_name: getFieldValue(formData, "reportingManagerName") || undefined,
         shop_Address1: getFieldValue(formData, "currentAddress1"),
         shop_Address2: getFieldValue(formData, "currentAddress2") || undefined,
         shop_District: getFieldValue(formData, "currentDistrict") || undefined,
@@ -440,11 +444,15 @@ function Arch_Engi() {
       submitFormData.append("data", JSON.stringify(backendPayload));
       const masonPhotoFile = formData.get("masonPhoto");
       const masonIdProofFile = formData.get("masonIdProof");
+      const masonAddressProofBackFile = formData.get("masonAddressProofBack");
       if (masonPhotoFile instanceof File && masonPhotoFile.size > 0) {
         submitFormData.append("photoProof", masonPhotoFile);
       }
       if (masonIdProofFile instanceof File && masonIdProofFile.size > 0) {
         submitFormData.append("idProof", masonIdProofFile);
+      }
+      if (masonAddressProofBackFile instanceof File && masonAddressProofBackFile.size > 0) {
+        submitFormData.append("idProofBack", masonAddressProofBackFile);
       }
 
       const registerResponse = await fetch(
@@ -1264,6 +1272,15 @@ function Arch_Engi() {
                 style={fieldStyle}
                 required
               />
+            </div>
+
+            <div style={responsiveGridTwo}>
+              <input
+                name="reportingManagerName"
+                placeholder="Reporting Manager"
+                style={fieldStyle}
+              />
+              <div />
             </div>
 
             <SectionTitle title="DEALER DETAILS" />

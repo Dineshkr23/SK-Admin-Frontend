@@ -147,7 +147,6 @@ function IndHouseForm() {
           "administrative_area_level_2",
           "administrative_area_level_3",
         );
-        const state = getByType("administrative_area_level_1");
         const formattedAddress =
           typeof firstResult.formatted_address === "string"
             ? firstResult.formatted_address
@@ -192,6 +191,7 @@ function IndHouseForm() {
             fieldElement.value = fieldValue;
           };
 
+          // Fill site location only - do NOT prefill permanent address (state)
           setNamedField("currentAddress1", cleanAddressLine1);
           setNamedField("currentAddress2", "");
           setNamedField("currentCityTown", cityTown);
@@ -200,9 +200,6 @@ function IndHouseForm() {
             "currentLandmark",
             district || cityTown || cleanAddressLine1,
           );
-          if (state) {
-            setNamedField("state", state);
-          }
         }
 
         setTalukOptions(postcodeLocalities);
@@ -472,10 +469,12 @@ function IndHouseForm() {
 
     try {
       const backendPayload = {
-        formType: "form_c" as const,
+        formType: "individual" as const,
+        title: payload.honorifics || undefined,
         pi_firstName: payload.firstName,
         pi_lastName: payload.lastName,
         pi_profession: payload.profession || "Individual",
+        age: payload.age || undefined,
         pi_phone: payload.phoneNumber,
         pi_whatsAppNumber: payload.whatsAppNumber || undefined,
         pi_emailId: payload.emailId || undefined,
@@ -496,6 +495,8 @@ function IndHouseForm() {
         shop_location: payload.shop_location,
         sod_nameOfTheDealer: payload.sod_nameOfTheDealer,
         sod_place: payload.sod_place,
+        sameAsAbove: formData.get("sameAsAbove") === "on",
+        remarks: getValue("remarks") || undefined,
       };
 
       const response = await fetch(`${SK_BACKEND_URL}/form-submissions`, {

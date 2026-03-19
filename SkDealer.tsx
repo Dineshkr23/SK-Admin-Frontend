@@ -423,7 +423,8 @@ function SkDealer() {
 
     try {
       const backendPayload = {
-        formType: "form_d" as const,
+        formType: "dealer" as const,
+        validationCode: getFieldValue(formData, "validationCode") || undefined,
         pi_firstName: getFieldValue(formData, "contactPerson") || getFieldValue(formData, "dealershipName"),
         pi_lastName: "",
         pi_profession: getFieldValue(formData, "ownershipType") || "Proprietor",
@@ -443,6 +444,50 @@ function SkDealer() {
         shop_City: getFieldValue(formData, "shopCityTown"),
         shop_Pincode: getFieldValue(formData, "shopPincode"),
         shop_Landmark: getFieldValue(formData, "shopLandmark") || undefined,
+        dealershipName: getFieldValue(formData, "dealershipName") || undefined,
+        contactPerson: getFieldValue(formData, "contactPerson") || undefined,
+        gstNumber: getFieldValue(formData, "gstNumber") || undefined,
+        panNumber: getFieldValue(formData, "panNumber") || undefined,
+        ownerSameAsAbove: formData.get("ownerSameAsAbove") === "on",
+        ownerTitle: getFieldValue(formData, "ownerTitle") || undefined,
+        ownerFirstName: getFieldValue(formData, "ownerFirstName") || undefined,
+        ownerLastName: getFieldValue(formData, "ownerLastName") || undefined,
+        ownerOfficeAddressLine1: getFieldValue(formData, "ownerOfficeAddressLine1") || undefined,
+        ownerOfficeAddressLine2: getFieldValue(formData, "ownerOfficeAddressLine2") || undefined,
+        ownerCity: getFieldValue(formData, "ownerCity") || undefined,
+        ownerState: getFieldValue(formData, "ownerState") || undefined,
+        ownerPostalCode: getFieldValue(formData, "ownerPostalCode") || undefined,
+        ownerPlace: getFieldValue(formData, "ownerPlace") || undefined,
+        ownerPhoneNumber: getFieldValue(formData, "ownerPhoneNumber") || undefined,
+        ownerEmailId: getFieldValue(formData, "ownerEmailId") || undefined,
+        secondContactTitle: getFieldValue(formData, "secondContactTitle") || undefined,
+        secondContactFirstName: getFieldValue(formData, "secondContactFirstName") || undefined,
+        secondContactLastName: getFieldValue(formData, "secondContactLastName") || undefined,
+        secondContactPhone: getFieldValue(formData, "secondContactPhone") || undefined,
+        secondContactEmail: getFieldValue(formData, "secondContactEmail") || undefined,
+        spouseName: getFieldValue(formData, "spouseName") || undefined,
+        spouseDob: spouseDob || undefined,
+        weddingDay: weddingDay || undefined,
+        childName1: getFieldValue(formData, "childName1") || undefined,
+        childDob1: childDob1 || undefined,
+        childName2: getFieldValue(formData, "childName2") || undefined,
+        childDob2: childDob2 || undefined,
+        childName3: getFieldValue(formData, "childName3") || undefined,
+        childDob3: childDob3 || undefined,
+        godownSameAsCompany: formData.get("godownSameAsCompany") === "on",
+        godownAddressLine1: getFieldValue(formData, "godownAddressLine1") || undefined,
+        godownAddressLine2: getFieldValue(formData, "godownAddressLine2") || undefined,
+        godownCity: getFieldValue(formData, "godownCity") || undefined,
+        godownState: getFieldValue(formData, "godownState") || undefined,
+        godownPostalCode: getFieldValue(formData, "godownPostalCode") || undefined,
+        godownContactPerson: getFieldValue(formData, "godownContactPerson") || undefined,
+        godownContactMobile: getFieldValue(formData, "godownContactMobile") || undefined,
+        referenceName1: getFieldValue(formData, "referenceName1") || undefined,
+        referencePhone1: getFieldValue(formData, "referencePhone1") || undefined,
+        referenceDetails1: getFieldValue(formData, "referenceDetails1") || undefined,
+        referenceName2: getFieldValue(formData, "referenceName2") || undefined,
+        referencePhone2: getFieldValue(formData, "referencePhone2") || undefined,
+        referenceDetails2: getFieldValue(formData, "referenceDetails2") || undefined,
       };
 
       const submitFormData = new FormData();
@@ -450,6 +495,7 @@ function SkDealer() {
       const masonPhotoFile = formData.get("masonPhoto");
       const masonIdProofFile = formData.get("masonIdProof");
       const masonAddressProofBackFile = formData.get("masonAddressProofBack");
+      const masonPanCopyFile = formData.get("masonPanCopy");
       if (masonPhotoFile instanceof File && masonPhotoFile.size > 0) {
         submitFormData.append("photoProof", masonPhotoFile);
       }
@@ -458,6 +504,9 @@ function SkDealer() {
       }
       if (masonAddressProofBackFile instanceof File && masonAddressProofBackFile.size > 0) {
         submitFormData.append("idProofBack", masonAddressProofBackFile);
+      }
+      if (masonPanCopyFile instanceof File && masonPanCopyFile.size > 0) {
+        submitFormData.append("panProof", masonPanCopyFile);
       }
 
       const registerResponse = await fetch(

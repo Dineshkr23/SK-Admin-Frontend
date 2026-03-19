@@ -30,10 +30,7 @@ type OtpVerificationState = {
   status: string;
 };
 
-const FORM_API_BASE =
-  typeof process !== "undefined" && process.env?.NEXT_PUBLIC_API_URL
-    ? process.env.NEXT_PUBLIC_API_URL
-    : "http://localhost:3000";
+const FORM_API_BASE = "https://sk-backend.emovur.com";
 
 type SubmitState = {
   submitting: boolean;
@@ -72,6 +69,9 @@ const FORM_FIELD_TO_BACKEND: Record<string, string> = {
   state: "pi_state",
   pincode: "pi_pincode",
   landmark: "pi_landmark",
+  validationCode: "validationCode",
+  sameAsAbove: "sameAsAbove",
+  remarks: "remarks",
   currentAddress1: "shop_Address1",
   currentAddress2: "shop_Address2",
   currentDistrict: "shop_District",
@@ -81,6 +81,7 @@ const FORM_FIELD_TO_BACKEND: Record<string, string> = {
   currentLandmark: "shop_Landmark",
   salesOfficerName: "ref_nameOfTheperson",
   salesOfficerContact: "ref_place",
+  reportingManagerName: "reporting_manager_name",
   dealerName: "sod_nameOfTheDealer",
   dealerPlace: "sod_place",
 };
@@ -222,17 +223,9 @@ function BarBendorsAndMasonsForm() {
       address.village ||
       "";
 
-    const stateValue = address.state;
     const pincodeValue = address.postcode;
 
-    setFieldIfEmpty("addressLine1", line1Value);
-    setFieldIfEmpty("district", districtValue);
-    setFieldIfEmpty("taluk", talukValue);
-    setFieldIfEmpty("city", cityValue);
-    setFieldIfEmpty("state", stateValue);
-    setFieldIfEmpty("pincode", pincodeValue);
-    setFieldIfEmpty("landmark", landmarkValue);
-
+    // Fill current location / shop address only - do NOT prefill permanent address
     setFieldIfEmpty("currentAddress1", line1Value);
     setFieldIfEmpty("currentDistrict", districtValue);
     setFieldIfEmpty("currentTaluk", talukValue);
@@ -426,7 +419,7 @@ function BarBendorsAndMasonsForm() {
 
     try {
       const payload: Record<string, string | boolean> = {
-        formType: "registration",
+        formType: "masonBarBender",
         isContacted: false,
         isApproved: false,
         isDeleted: false,
@@ -437,7 +430,12 @@ function BarBendorsAndMasonsForm() {
       formData.forEach((value, key) => {
         if (typeof value === "string" && FORM_FIELD_TO_BACKEND[key]) {
           const backendKey = FORM_FIELD_TO_BACKEND[key];
-          if (backendKey) payload[backendKey] = value;
+          if (!backendKey) return;
+          if (backendKey === "sameAsAbove") {
+            payload[backendKey] = value === "on";
+            return;
+          }
+          payload[backendKey] = value;
         }
       });
 
@@ -1249,6 +1247,15 @@ function BarBendorsAndMasonsForm() {
                 placeholder="Contact No*"
                 style={fieldStyle}
               />
+            </div>
+
+            <div style={responsiveGridTwo}>
+              <input
+                name="reportingManagerName"
+                placeholder="Reporting Manager"
+                style={fieldStyle}
+              />
+              <div />
             </div>
 
             <SectionTitle title="DEALER DETAILS" />
