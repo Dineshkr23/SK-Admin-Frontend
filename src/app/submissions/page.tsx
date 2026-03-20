@@ -4879,175 +4879,73 @@ export default function SubmissionsPage() {
                               variant="outlined"
                               startIcon={<PrintIcon />}
                               onClick={() => {
-                                const target = document.getElementById(
+                                const source = document.getElementById(
                                   "passport-to-progress-print",
                                 );
-                                if (!target) return;
+                                if (!source) return;
 
-                                // Print via an off-screen iframe so we don't disrupt React's DOM.
-                                const iframe = document.createElement("iframe");
-                                iframe.setAttribute("aria-hidden", "true");
-                                iframe.style.position = "fixed";
-                                iframe.style.right = "0";
-                                iframe.style.bottom = "0";
-                                iframe.style.width = "0";
-                                iframe.style.height = "0";
-                                iframe.style.border = "0";
-                                iframe.style.overflow = "hidden";
+                                const inlineComputedStyles = (
+                                  src: Element,
+                                  dst: Element,
+                                ) => {
+                                  const computed = window.getComputedStyle(src);
+                                  const dstEl = dst as HTMLElement;
+                                  if (dstEl.style) {
+                                    for (let i = 0; i < computed.length; i++) {
+                                      const prop = computed[i];
+                                      dstEl.style.setProperty(
+                                        prop,
+                                        computed.getPropertyValue(prop),
+                                      );
+                                    }
+                                  }
+                                  for (let i = 0; i < src.children.length; i++) {
+                                    if (dst.children[i]) {
+                                      inlineComputedStyles(
+                                        src.children[i],
+                                        dst.children[i],
+                                      );
+                                    }
+                                  }
+                                };
 
-                                document.body.appendChild(iframe);
+                                const clone = source.cloneNode(true) as HTMLElement;
+                                clone.removeAttribute("id");
+                                inlineComputedStyles(source, clone);
+
+                                const wrapper = document.createElement("div");
+                                wrapper.id = "__passport-print-wrapper__";
+                                wrapper.style.display = "none";
+                                wrapper.appendChild(clone);
+                                document.body.appendChild(wrapper);
+
+                                const styleId = "__passport-print-style__";
+                                document.getElementById(styleId)?.remove();
+                                const style = document.createElement("style");
+                                style.id = styleId;
+                                style.textContent = `
+                                  @media print {
+                                    body > *:not(#__passport-print-wrapper__) {
+                                      display: none !important;
+                                    }
+                                    #__passport-print-wrapper__ {
+                                      display: block !important;
+                                      -webkit-print-color-adjust: exact !important;
+                                      print-color-adjust: exact !important;
+                                    }
+                                    @page { margin: 10mm; }
+                                  }
+                                `;
+                                document.head.appendChild(style);
 
                                 const cleanup = () => {
-                                  try {
-                                    document.body.removeChild(iframe);
-                                  } catch {
-                                    // ignore
-                                  }
+                                  wrapper.remove();
+                                  style.remove();
+                                  window.removeEventListener("afterprint", cleanup);
                                 };
+                                window.addEventListener("afterprint", cleanup);
 
-                                const doc =
-                                  iframe.contentDocument ||
-                                  iframe.contentWindow?.document;
-                                if (!doc) {
-                                  cleanup();
-                                  return;
-                                }
-
-                                const styleHtml = Array.from(
-                                  document.querySelectorAll("style"),
-                                )
-                                  .map((s) => s.outerHTML)
-                                  // Keep @media print rules so the iframe print has the same styling.
-                                  .join("");
-
-                                const styleLinks = Array.from(
-                                  document.querySelectorAll(
-                                    'link[rel="stylesheet"], link[rel="preload"][as="style"]',
-                                  ),
-                                ) as HTMLLinkElement[];
-
-                                const seenHrefs = new Set<string>();
-                                const linkHtml = styleLinks
-                                  .map((l) => {
-                                    const href =
-                                      l.getAttribute("href") ??
-                                      // Next sometimes puts the real CSS url in data-n-href for some link types.
-                                      (l as unknown as { dataset?: { nHref?: string } }).dataset
-                                        ?.nHref ??
-                                      l.getAttribute("data-n-href");
-
-                                    if (!href) return "";
-
-                                    const absHref = new URL(
-                                      href,
-                                      document.baseURI,
-                                    ).toString();
-
-                                    if (seenHrefs.has(absHref)) return "";
-                                    seenHrefs.add(absHref);
-
-                                    const media = l.media?.trim();
-                                    return `<link rel="stylesheet" href="${absHref}"${
-                                      media ? ` media="${media}"` : ""
-                                    } />`;
-                                  })
-                                  .join("");
-
-                                // Use the document base so stylesheet URLs resolve correctly on server (reverse proxies/subpaths).
-                                const baseHref = new URL("/", document.baseURI).toString();
-
-                                doc.open();
-                                doc.write(`
-                                  <!doctype html>
-                                  <html>
-                                    <head>
-                                      <meta charset="utf-8" />
-                                      <base href="${baseHref}" />
-                                      ${styleHtml}
-                                      ${linkHtml}
-                                      <style>
-                                        @page { margin: 0; }
-                                        html, body { margin: 0; padding: 0; }
-                                        body * { visibility: visible !important; }
-                                        /* Don't repeat any other app UI; iframe contains only the target. */
-                                      </style>
-                                    </head>
-                                    <body>
-                                      ${target.outerHTML}
-                                    </body>
-                                  </html>
-                                `);
-                                doc.close();
-
-                                const waitForImages = async () => {
-                                  const imgs = Array.from(doc.images || []);
-                                  if (!imgs.length) return;
-
-                                  await Promise.all(
-                                    imgs.map(
-                                      (img) =>
-                                        new Promise<void>((resolve) => {
-                                          const done = () => resolve();
-                                          if (img.complete) return done();
-                                          img.addEventListener("load", done, {
-                                            once: true,
-                                          });
-                                          img.addEventListener("error", done, {
-                                            once: true,
-                                          });
-                                        }),
-                                    ),
-                                  );
-                                };
-
-                                const waitForStyles = async () => {
-                                  const links = Array.from(
-                                    doc.querySelectorAll(
-                                      'link[rel="stylesheet"]',
-                                    ),
-                                  ) as HTMLLinkElement[];
-                                  if (!links.length) return;
-
-                                  await Promise.all(
-                                    links.map(
-                                      (link) =>
-                                        new Promise<void>((resolve) => {
-                                          // sheet is same-origin; if already available, resolve.
-                                          if (link.sheet) return resolve();
-                                          link.addEventListener("load", () => resolve(), {
-                                            once: true,
-                                          });
-                                          link.addEventListener("error", () => resolve(), {
-                                            once: true,
-                                          });
-                                        }),
-                                    ),
-                                  );
-                                };
-
-                                const doPrint = async () => {
-                                  try {
-                                    await waitForStyles();
-                                    await waitForImages();
-                                    // Safari sometimes needs focus.
-                                    if (iframe.contentWindow) {
-                                      iframe.contentWindow.onafterprint =
-                                        cleanup;
-                                      iframe.contentWindow.focus();
-                                      iframe.contentWindow.print();
-                                    }
-                                  } finally {
-                                    // Fallback cleanup (some browsers don't reliably fire afterprint for iframes).
-                                    window.setTimeout(cleanup, 15000);
-                                  }
-                                };
-
-                                iframe.onload = () => {
-                                  // Let layout happen before printing.
-                                  setTimeout(() => void doPrint(), 200);
-                                };
-                                // In case onload doesn't fire for srcdoc-less iframe.
-                                setTimeout(() => void doPrint(), 1000);
+                                window.print();
                               }}
                               sx={{
                                 fontWeight: 800,
@@ -5058,7 +4956,7 @@ export default function SubmissionsPage() {
                             </Button>
                           </Box>
 
-                          <style>{`/* Print is handled by an iframe (see Print button handler). */`}</style>
+                          <style>{`/* Print styles are injected dynamically by the Print button handler. */`}</style>
                         </Box>
                       )}
                     </>
