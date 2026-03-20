@@ -4920,19 +4920,33 @@ export default function SubmissionsPage() {
                                   // Keep @media print rules so the iframe print has the same styling.
                                   .join("");
 
-                                const linkHtml = Array.from(
+                                const styleLinks = Array.from(
                                   document.querySelectorAll(
-                                    'link[rel="stylesheet"]',
+                                    'link[rel="stylesheet"], link[rel="preload"][as="style"]',
                                   ),
-                                )
+                                ) as HTMLLinkElement[];
+
+                                const seenHrefs = new Set<string>();
+                                const linkHtml = styleLinks
                                   .map((l) => {
-                                    const href = (l as HTMLLinkElement).getAttribute("href");
+                                    const href =
+                                      l.getAttribute("href") ??
+                                      // Next sometimes puts the real CSS url in data-n-href for some link types.
+                                      (l as unknown as { dataset?: { nHref?: string } }).dataset
+                                        ?.nHref ??
+                                      l.getAttribute("data-n-href");
+
                                     if (!href) return "";
+
                                     const absHref = new URL(
                                       href,
                                       document.baseURI,
                                     ).toString();
-                                    const media = (l as HTMLLinkElement).media?.trim();
+
+                                    if (seenHrefs.has(absHref)) return "";
+                                    seenHrefs.add(absHref);
+
+                                    const media = l.media?.trim();
                                     return `<link rel="stylesheet" href="${absHref}"${
                                       media ? ` media="${media}"` : ""
                                     } />`;
