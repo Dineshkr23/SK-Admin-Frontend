@@ -1019,7 +1019,7 @@ function BarBendorsAndMasonsForm() {
             <div style={responsiveGridTwo}>
               <select name="profession" style={fieldStyle} defaultValue="Mason">
                 <option>Mason</option>
-                <option>Barbender</option>
+                <option>BarBender</option>
               </select>
               <div style={dateInputWrapperStyle}>
                 <ThemedDatePickerInput
@@ -1249,6 +1249,7 @@ function BarBendorsAndMasonsForm() {
               />
             </div>
 
+            <SectionTitle title="REPORTING MANAGER DETAILS" />
             <div style={responsiveGridTwo}>
               <input
                 name="reportingManagerName"

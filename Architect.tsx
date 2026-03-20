@@ -416,19 +416,22 @@ function Arch_Engi() {
         pi_profession: getFieldValue(formData, "profession") || "Architect",
         pi_dob: getFieldValue(formData, "dateOfBirth") || undefined,
         pi_phone: getFieldValue(formData, "phoneNumber"),
-        pi_whatsAppNumber: getFieldValue(formData, "whatsappNumber") || undefined,
+        pi_whatsAppNumber:
+          getFieldValue(formData, "whatsappNumber") || undefined,
         pi_emailId: getFieldValue(formData, "emailId") || undefined,
         pi_addressLane1: getFieldValue(formData, "addressLine1"),
         pi_addressLane2: getFieldValue(formData, "addressLine2") || undefined,
         pi_city: getFieldValue(formData, "city"),
         pi_state: getFieldValue(formData, "state"),
-        pi_anniversaryDate: getFieldValue(formData, "anniversaryDate") || undefined,
-          validationCode: getFieldValue(formData, "validationCode") || undefined,
-          sameAsAbove: formData.get("sameAsAbove") === "on",
-          remarks: getFieldValue(formData, "remarks") || undefined,
+        pi_anniversaryDate:
+          getFieldValue(formData, "anniversaryDate") || undefined,
+        validationCode: getFieldValue(formData, "validationCode") || undefined,
+        sameAsAbove: formData.get("sameAsAbove") === "on",
+        remarks: getFieldValue(formData, "remarks") || undefined,
         ref_nameOfTheperson: getFieldValue(formData, "salesOfficerName"),
         ref_place: getFieldValue(formData, "salesOfficerContact"),
-        reporting_manager_name: getFieldValue(formData, "reportingManagerName") || undefined,
+        reporting_manager_name:
+          getFieldValue(formData, "reportingManagerName") || undefined,
         shop_Address1: getFieldValue(formData, "currentAddress1"),
         shop_Address2: getFieldValue(formData, "currentAddress2") || undefined,
         shop_District: getFieldValue(formData, "currentDistrict") || undefined,
@@ -451,7 +454,10 @@ function Arch_Engi() {
       if (masonIdProofFile instanceof File && masonIdProofFile.size > 0) {
         submitFormData.append("idProof", masonIdProofFile);
       }
-      if (masonAddressProofBackFile instanceof File && masonAddressProofBackFile.size > 0) {
+      if (
+        masonAddressProofBackFile instanceof File &&
+        masonAddressProofBackFile.size > 0
+      ) {
         submitFormData.append("idProofBack", masonAddressProofBackFile);
       }
 
@@ -1274,13 +1280,13 @@ function Arch_Engi() {
               />
             </div>
 
+            <SectionTitle title="REPORTING MANAGER DETAILS" />
             <div style={responsiveGridTwo}>
               <input
                 name="reportingManagerName"
                 placeholder="Reporting Manager"
                 style={fieldStyle}
               />
-              <div />
             </div>
 
             <SectionTitle title="DEALER DETAILS" />

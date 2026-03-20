@@ -4732,7 +4732,125 @@ export default function SubmissionsPage() {
                           >
                             <Button
                               variant="outlined"
-                              onClick={() => window.print()}
+                              onClick={() => {
+                                const target = document.getElementById(
+                                  "passport-to-progress-print",
+                                );
+                                if (!target) return;
+
+                                // Print via an off-screen iframe so we don't disrupt React's DOM.
+                                const iframe = document.createElement("iframe");
+                                iframe.setAttribute("aria-hidden", "true");
+                                iframe.style.position = "fixed";
+                                iframe.style.right = "0";
+                                iframe.style.bottom = "0";
+                                iframe.style.width = "0";
+                                iframe.style.height = "0";
+                                iframe.style.border = "0";
+                                iframe.style.overflow = "hidden";
+
+                                document.body.appendChild(iframe);
+
+                                const cleanup = () => {
+                                  try {
+                                    document.body.removeChild(iframe);
+                                  } catch {
+                                    // ignore
+                                  }
+                                };
+
+                                const doc =
+                                  iframe.contentDocument ||
+                                  iframe.contentWindow?.document;
+                                if (!doc) {
+                                  cleanup();
+                                  return;
+                                }
+
+                                const styleHtml = Array.from(
+                                  document.querySelectorAll("style"),
+                                )
+                                  .map((s) => s.outerHTML)
+                                  // Avoid copying @media print rules from the app.
+                                  .filter((html) => !html.includes("@media print"))
+                                  .join("");
+
+                                const linkHtml = Array.from(
+                                  document.querySelectorAll(
+                                    'link[rel="stylesheet"]',
+                                  ),
+                                )
+                                  .map((l) => l.outerHTML)
+                                  .join("");
+
+                                const baseHref = window.location.origin + "/";
+
+                                doc.open();
+                                doc.write(`
+                                  <!doctype html>
+                                  <html>
+                                    <head>
+                                      <meta charset="utf-8" />
+                                      <base href="${baseHref}" />
+                                      ${styleHtml}
+                                      ${linkHtml}
+                                      <style>
+                                        @page { margin: 0; }
+                                        html, body { margin: 0; padding: 0; }
+                                        body * { visibility: visible !important; }
+                                        /* Don't repeat any other app UI; iframe contains only the target. */
+                                      </style>
+                                    </head>
+                                    <body>
+                                      ${target.outerHTML}
+                                    </body>
+                                  </html>
+                                `);
+                                doc.close();
+
+                                const waitForImages = async () => {
+                                  const imgs = Array.from(doc.images || []);
+                                  if (!imgs.length) return;
+
+                                  await Promise.all(
+                                    imgs.map(
+                                      (img) =>
+                                        new Promise<void>((resolve) => {
+                                          const done = () => resolve();
+                                          if (img.complete) return done();
+                                          img.addEventListener("load", done, {
+                                            once: true,
+                                          });
+                                          img.addEventListener("error", done, {
+                                            once: true,
+                                          });
+                                        }),
+                                    ),
+                                  );
+                                };
+
+                                const doPrint = async () => {
+                                  try {
+                                    await waitForImages();
+                                    // Safari sometimes needs focus.
+                                    if (iframe.contentWindow) {
+                                      iframe.contentWindow.onafterprint = cleanup;
+                                      iframe.contentWindow.focus();
+                                      iframe.contentWindow.print();
+                                    }
+                                  } finally {
+                                    // Fallback cleanup (some browsers don't reliably fire afterprint for iframes).
+                                    window.setTimeout(cleanup, 15000);
+                                  }
+                                };
+
+                                iframe.onload = () => {
+                                  // Let layout happen before printing.
+                                  setTimeout(() => void doPrint(), 200);
+                                };
+                                // In case onload doesn't fire for srcdoc-less iframe.
+                                setTimeout(() => void doPrint(), 1000);
+                              }}
                               sx={{
                                 fontWeight: 800,
                                 borderColor: adminColors.borderLight,
@@ -4742,13 +4860,7 @@ export default function SubmissionsPage() {
                             </Button>
                           </Box>
 
-                          <style>{`
-                          @media print {
-                            body * { visibility: hidden; }
-                            #passport-to-progress-print, #passport-to-progress-print * { visibility: visible; }
-                            #passport-to-progress-print { position: absolute; left: 0; top: 0; }
-                          }
-                        `}</style>
+                          <style>{`/* Print is handled by an iframe (see Print button handler). */`}</style>
                         </Box>
                       )}
                     </>
