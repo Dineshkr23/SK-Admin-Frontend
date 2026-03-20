@@ -4917,10 +4917,7 @@ export default function SubmissionsPage() {
                                   document.querySelectorAll("style"),
                                 )
                                   .map((s) => s.outerHTML)
-                                  // Avoid copying @media print rules from the app.
-                                  .filter(
-                                    (html) => !html.includes("@media print"),
-                                  )
+                                  // Keep @media print rules so the iframe print has the same styling.
                                   .join("");
 
                                 const linkHtml = Array.from(
@@ -4977,8 +4974,34 @@ export default function SubmissionsPage() {
                                   );
                                 };
 
+                                const waitForStyles = async () => {
+                                  const links = Array.from(
+                                    doc.querySelectorAll(
+                                      'link[rel="stylesheet"]',
+                                    ),
+                                  ) as HTMLLinkElement[];
+                                  if (!links.length) return;
+
+                                  await Promise.all(
+                                    links.map(
+                                      (link) =>
+                                        new Promise<void>((resolve) => {
+                                          // sheet is same-origin; if already available, resolve.
+                                          if (link.sheet) return resolve();
+                                          link.addEventListener("load", () => resolve(), {
+                                            once: true,
+                                          });
+                                          link.addEventListener("error", () => resolve(), {
+                                            once: true,
+                                          });
+                                        }),
+                                    ),
+                                  );
+                                };
+
                                 const doPrint = async () => {
                                   try {
+                                    await waitForStyles();
                                     await waitForImages();
                                     // Safari sometimes needs focus.
                                     if (iframe.contentWindow) {
