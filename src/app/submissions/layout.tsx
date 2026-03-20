@@ -53,11 +53,13 @@ export default function SubmissionsLayout({
             onClick={handleLogout}
             startIcon={<LogoutIcon />}
             sx={{
+              padding: "8px 20px",
               backgroundColor: "#000",
               color: "#fff",
               "&:hover": {
                 backgroundColor: "#fff",
                 color: "#000",
+                border: "1px solid #000",
               },
             }}
           >

@@ -222,3 +222,14 @@ export async function bulkUpdateSubmissions(
     }),
   });
 }
+
+export async function fetchGlobalPrice(): Promise<{ price: number }> {
+  return api<{ price: number }>('/admin/price');
+}
+
+export async function updateGlobalPrice(price: number): Promise<{ price: number }> {
+  return api<{ price: number }>('/admin/price', {
+    method: 'POST',
+    body: JSON.stringify({ price }),
+  });
+}

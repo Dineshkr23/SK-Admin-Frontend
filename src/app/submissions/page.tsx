@@ -33,6 +33,15 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import CheckCircleOutlineRoundedIcon from "@mui/icons-material/CheckCircleOutlineRounded";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import FilterListIcon from "@mui/icons-material/FilterList";
+import CurrencyRupeeIcon from "@mui/icons-material/CurrencyRupee";
+import CancelIcon from "@mui/icons-material/Cancel";
+import CloseIcon from "@mui/icons-material/Close";
+import DeleteIcon from "@mui/icons-material/Delete";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import LocationOnIcon from "@mui/icons-material/LocationOn";
+import PrintIcon from "@mui/icons-material/Print";
+import SaveIcon from "@mui/icons-material/Save";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { DataGrid, GridColDef, GridRowSelectionModel } from "@mui/x-data-grid";
 import { DatePicker } from "@mui/x-date-pickers";
 import dayjs from "dayjs";
@@ -43,9 +52,12 @@ import {
   bulkUpdateSubmissions,
   updateSubmission,
   exportSubmissionsExcel,
+  fetchGlobalPrice,
+  updateGlobalPrice,
   type TableRecord,
   type SubmissionDetail,
 } from "@/lib/api";
+import { getUserRole } from "@/lib/auth";
 import {
   adminColors,
   adminSectionHeaderBarStyle,
@@ -336,6 +348,11 @@ const dialogGridSx = {
 } as const;
 
 export default function SubmissionsPage() {
+  const userRole = getUserRole();
+  const isPriceEditor = userRole === "PRICE_EDITOR";
+  const canExportExcel = userRole === "ADMIN";
+  const canUpdatePrice = userRole === "ADMIN" || userRole === "PRICE_EDITOR";
+
   const [rows, setRows] = useState<TableRecord[]>([]);
   const [recordCount, setRecordCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -405,6 +422,50 @@ export default function SubmissionsPage() {
   const [exportFormType, setExportFormType] = useState("");
   const [exportLoading, setExportLoading] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+
+  const [priceDialogOpen, setPriceDialogOpen] = useState(false);
+  const [priceValue, setPriceValue] = useState<string>("");
+  const [priceUpdating, setPriceUpdating] = useState(false);
+  const [priceDialogError, setPriceDialogError] = useState<string | null>(null);
+
+  const openUpdatePriceDialog = async () => {
+    setPriceDialogError(null);
+    setPriceDialogOpen(true);
+    setPriceUpdating(true);
+    try {
+      const { price } = await fetchGlobalPrice();
+      setPriceValue(String(price ?? 0));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to load price";
+      setPriceDialogError(msg);
+    } finally {
+      setPriceUpdating(false);
+    }
+  };
+
+  const handleUpdatePrice = async () => {
+    setPriceDialogError(null);
+
+    const n = Number(priceValue);
+    if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) {
+      setPriceDialogError("Please enter a valid non-negative integer price.");
+      return;
+    }
+
+    setPriceUpdating(true);
+    try {
+      await updateGlobalPrice(n);
+      setPriceDialogOpen(false);
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Failed to update price. Try again.";
+      setPriceDialogError(msg);
+    } finally {
+      setPriceUpdating(false);
+    }
+  };
 
   const openExportDialog = () => {
     setExportFrom(dateFrom);
@@ -526,6 +587,7 @@ export default function SubmissionsPage() {
   }, [search]);
 
   useEffect(() => {
+    if (userRole === "PRICE_EDITOR") return;
     let cancelled = false;
     Promise.all([
       fetchFilterOptions("salesOfficer"),
@@ -540,7 +602,7 @@ export default function SubmissionsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [userRole]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -600,8 +662,9 @@ export default function SubmissionsPage() {
   ]);
 
   useEffect(() => {
+    if (userRole === "PRICE_EDITOR") return;
     load();
-  }, [load]);
+  }, [load, userRole]);
 
   const loadDeleted = useCallback(async () => {
     if (!deletedDialogOpen) return;
@@ -1074,257 +1137,323 @@ export default function SubmissionsPage() {
         overflow: "hidden",
       }}
     >
-      <Stack
-        direction="row"
-        spacing={1}
-        flexWrap="wrap"
-        sx={{ mb: 2, flexShrink: 0, padding: "10px 0px", pr: "10px" }}
-        useFlexGap
-      >
-        <TextField
-          size="small"
-          placeholder="Search..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          sx={{
-            minWidth: 200,
-            maxWidth: 500,
-            width: "100%",
-            flex: 1,
-            backgroundColor: "#ffffff",
-            "& .MuiInputBase-root": { backgroundColor: "#ffffff" },
-          }}
-        />
-        <DatePicker
-          label="From"
-          value={dateFrom ? dayjs(dateFrom) : null}
-          onChange={(d) => setDateFrom(d ? d.format("YYYY-MM-DD") : "")}
-          slotProps={{ textField: { size: "small" } }}
-          sx={{ minWidth: 140 }}
-        />
-        <DatePicker
-          label="To"
-          value={dateTo ? dayjs(dateTo) : null}
-          onChange={(d) => setDateTo(d ? d.format("YYYY-MM-DD") : "")}
-          slotProps={{ textField: { size: "small" } }}
-          sx={{ minWidth: 140 }}
-        />
-
-        <Button
-          size="small"
-          variant="contained"
-          onClick={openExportDialog}
-          disabled={exportLoading}
-          sx={{
-            padding: 1,
-            fontWeight: 700,
-            minWidth: 160,
-            bgcolor: "#0CA65A",
-            color: "#ffffff",
-            border: "none",
-            "&:hover": {
-              bgcolor: "#038947",
-            },
-          }}
+      {isPriceEditor ? (
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ mb: 2, flexShrink: 0, padding: "10px 0px", pr: "10px" }}
+          useFlexGap
         >
-          Export Excel
-        </Button>
-
-        <IconButton
-          size="small"
-          onClick={handleOpenFilters}
-          aria-label="More filters"
-          sx={{
-            ml: "auto",
-            bgcolor: "#ffffff",
-            borderRadius: 1,
-            p: 1,
-            color: "#000000",
-            boxShadow: "0 0 0 4px #ffffff, 0 10px 22px rgba(0,0,0,0.25)",
-            transition: "transform 120ms ease, box-shadow 120ms ease",
-            "&:hover": {
-              transform: "translateY(-1px)",
-              boxShadow: "0 0 0 4px #ffffff, 0 14px 30px rgba(0,0,0,0.45)",
-            },
-          }}
-        >
-          <FilterListIcon fontSize="medium" />
-        </IconButton>
-      </Stack>
-
-      <Popover
-        open={filtersPopoverOpen}
-        anchorEl={filtersPopoverAnchorEl}
-        onClose={handleCloseFilters}
-        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
-        transformOrigin={{ vertical: "top", horizontal: "left" }}
-        PaperProps={{ sx: { p: 2, width: 420, maxWidth: "90vw" } }}
-        disableRestoreFocus
-      >
-        <Stack spacing={2}>
-          <FormControl size="small">
-            <InputLabel id="status-filter-label-pop">Status</InputLabel>
-            <Select
-              labelId="status-filter-label-pop"
-              value={statusFilter}
-              label="Status"
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              {STATUS_DROPDOWN_OPTIONS.map((opt) => (
-                <MenuItem key={opt.value || "all"} value={opt.value}>
-                  {opt.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <FormControl size="small">
-            <InputLabel id="profession-filter-label-pop">Profession</InputLabel>
-            <Select
-              labelId="profession-filter-label-pop"
-              value={professionFilter}
-              label="Profession"
-              onChange={(e) => setProfessionFilter(e.target.value)}
-            >
-              {PROFESSION_DROPDOWN_OPTIONS.map((opt) => (
-                <MenuItem key={opt.value || "all"} value={opt.value}>
-                  {opt.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <Autocomplete
-            multiple
-            disablePortal
-            size="small"
-            options={salesOfficerOptions}
-            value={salesOfficerSelected}
-            onChange={(_, newValue) => setSalesOfficerSelected(newValue)}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Sales Officer"
-                sx={{
-                  backgroundColor: "#ffffff",
-                  "& .MuiInputBase-root": { backgroundColor: "#ffffff" },
-                }}
-              />
-            )}
-          />
-
-          <Autocomplete
-            multiple
-            disablePortal
-            size="small"
-            options={reportingManagerOptions}
-            value={reportingManagerSelected}
-            onChange={(_, newValue) => setReportingManagerSelected(newValue)}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Reporting Manager"
-                sx={{
-                  backgroundColor: "#ffffff",
-                  "& .MuiInputBase-root": { backgroundColor: "#ffffff" },
-                }}
-              />
-            )}
-          />
-
           <Button
             size="small"
             variant="outlined"
-            color="error"
-            onClick={() => {
-              setDeletedPage(0);
-              setDeletedDialogOpen(true);
-              handleCloseFilters();
+            onClick={openUpdatePriceDialog}
+            disabled={priceUpdating}
+            startIcon={<CurrencyRupeeIcon />}
+            sx={{
+              padding: 1,
+              fontWeight: 700,
+              minWidth: 160,
+              bgcolor: "#ffffff",
+              color: "#d11b1b",
+              border: "1px solid #d11b1b",
+              "&:hover": {
+                bgcolor: "rgba(209, 27, 27, 0.08)",
+                border: "1px solid #d11b1b",
+              },
             }}
           >
-            View Deleted Records
+            Update Price
           </Button>
         </Stack>
-      </Popover>
-
-      <Box
-        sx={{
-          flex: 1,
-          minHeight: 0,
-          width: "100%",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        {selectedIds.length > 0 && (
+      ) : (
+        <>
           <Stack
             direction="row"
-            alignItems="center"
-            spacing={2}
+            spacing={1}
+            flexWrap="wrap"
+            sx={{ mb: 2, flexShrink: 0, padding: "10px 0px", pr: "10px" }}
+            useFlexGap
+          >
+            <TextField
+              size="small"
+              placeholder="Search..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              sx={{
+                minWidth: 200,
+                maxWidth: 500,
+                width: "100%",
+                flex: 1,
+                backgroundColor: "#ffffff",
+                "& .MuiInputBase-root": { backgroundColor: "#ffffff" },
+              }}
+            />
+            <DatePicker
+              label="From"
+              value={dateFrom ? dayjs(dateFrom) : null}
+              onChange={(d) => setDateFrom(d ? d.format("YYYY-MM-DD") : "")}
+              slotProps={{ textField: { size: "small" } }}
+              sx={{ minWidth: 140 }}
+            />
+            <DatePicker
+              label="To"
+              value={dateTo ? dayjs(dateTo) : null}
+              onChange={(d) => setDateTo(d ? d.format("YYYY-MM-DD") : "")}
+              slotProps={{ textField: { size: "small" } }}
+              sx={{ minWidth: 140 }}
+            />
+
+            {canExportExcel && (
+              <Button
+                size="small"
+                variant="contained"
+                onClick={openExportDialog}
+                disabled={exportLoading}
+                startIcon={<FileDownloadIcon />}
+                sx={{
+                  padding: 1,
+                  fontWeight: 700,
+                  minWidth: 160,
+                  bgcolor: "#0CA65A",
+                  color: "#ffffff",
+                  border: "none",
+                  "&:hover": {
+                    bgcolor: "#038947",
+                  },
+                }}
+              >
+                Export Excel
+              </Button>
+            )}
+
+            {canUpdatePrice && (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={openUpdatePriceDialog}
+                disabled={priceUpdating}
+                startIcon={<CurrencyRupeeIcon />}
+                sx={{
+                  padding: 1,
+                  fontWeight: 700,
+                  minWidth: 160,
+                  bgcolor: "#ffffff",
+                  color: "#d11b1b",
+                  border: "1px solid #d11b1b",
+                  "&:hover": {
+                    bgcolor: "rgba(209, 27, 27, 0.08)",
+                    border: "1px solid #d11b1b",
+                  },
+                }}
+              >
+                Update Price
+              </Button>
+            )}
+
+            <IconButton
+              size="small"
+              onClick={handleOpenFilters}
+              aria-label="More filters"
+              sx={{
+                ml: "auto",
+                bgcolor: "#ffffff",
+                borderRadius: 1,
+                p: 1,
+                color: "#000000",
+                boxShadow: "0 0 0 4px #ffffff, 0 10px 22px rgba(0,0,0,0.25)",
+                transition: "transform 120ms ease, box-shadow 120ms ease",
+                "&:hover": {
+                  transform: "translateY(-1px)",
+                  boxShadow: "0 0 0 4px #ffffff, 0 14px 30px rgba(0,0,0,0.45)",
+                },
+              }}
+            >
+              <FilterListIcon fontSize="medium" />
+            </IconButton>
+          </Stack>
+
+          <Popover
+            open={filtersPopoverOpen}
+            anchorEl={filtersPopoverAnchorEl}
+            onClose={handleCloseFilters}
+            anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+            transformOrigin={{ vertical: "top", horizontal: "left" }}
+            PaperProps={{ sx: { p: 2, width: 420, maxWidth: "90vw" } }}
+            disableRestoreFocus
+          >
+            <Stack spacing={2}>
+              <FormControl size="small">
+                <InputLabel id="status-filter-label-pop">Status</InputLabel>
+                <Select
+                  labelId="status-filter-label-pop"
+                  value={statusFilter}
+                  label="Status"
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                >
+                  {STATUS_DROPDOWN_OPTIONS.map((opt) => (
+                    <MenuItem key={opt.value || "all"} value={opt.value}>
+                      {opt.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl size="small">
+                <InputLabel id="profession-filter-label-pop">
+                  Profession
+                </InputLabel>
+                <Select
+                  labelId="profession-filter-label-pop"
+                  value={professionFilter}
+                  label="Profession"
+                  onChange={(e) => setProfessionFilter(e.target.value)}
+                >
+                  {PROFESSION_DROPDOWN_OPTIONS.map((opt) => (
+                    <MenuItem key={opt.value || "all"} value={opt.value}>
+                      {opt.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <Autocomplete
+                multiple
+                disablePortal
+                size="small"
+                options={salesOfficerOptions}
+                value={salesOfficerSelected}
+                onChange={(_, newValue) => setSalesOfficerSelected(newValue)}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Sales Officer"
+                    sx={{
+                      backgroundColor: "#ffffff",
+                      "& .MuiInputBase-root": { backgroundColor: "#ffffff" },
+                    }}
+                  />
+                )}
+              />
+
+              <Autocomplete
+                multiple
+                disablePortal
+                size="small"
+                options={reportingManagerOptions}
+                value={reportingManagerSelected}
+                onChange={(_, newValue) =>
+                  setReportingManagerSelected(newValue)
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Reporting Manager"
+                    sx={{
+                      backgroundColor: "#ffffff",
+                      "& .MuiInputBase-root": { backgroundColor: "#ffffff" },
+                    }}
+                  />
+                )}
+              />
+
+              <Button
+                size="small"
+                variant="outlined"
+                color="error"
+                onClick={() => {
+                  setDeletedPage(0);
+                  setDeletedDialogOpen(true);
+                  handleCloseFilters();
+                }}
+                startIcon={<VisibilityIcon />}
+              >
+                View Deleted Records
+              </Button>
+            </Stack>
+          </Popover>
+
+          <Box
             sx={{
-              flexShrink: 0,
-              py: 1,
-              px: 1.5,
-              backgroundColor: "action.selected",
+              flex: 1,
+              minHeight: 0,
+              width: "100%",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
-            <Typography variant="body2" fontWeight={500}>
-              {selectedIds.length} row{selectedIds.length !== 1 ? "s" : ""}{" "}
-              selected
-            </Typography>
-            <Button
-              size="small"
-              color="error"
-              variant="outlined"
-              onClick={handleBulkDelete}
-              disabled={bulkActionLoading}
-            >
-              {bulkActionLoading ? "Updating…" : "Delete"}
-            </Button>
-          </Stack>
-        )}
-        <DataGrid
-          rows={rows}
-          columns={columns}
-          loading={loading}
-          paginationMode="server"
-          rowCount={recordCount}
-          paginationModel={{ page, pageSize }}
-          onPaginationModelChange={(m) => {
-            setPage(m.page);
-            setPageSize(m.pageSize);
-          }}
-          pageSizeOptions={[10, 20, 50]}
-          checkboxSelection
-          rowSelectionModel={rowSelectionModel}
-          onRowSelectionModelChange={(newModel) =>
-            setRowSelectionModel(newModel)
-          }
-          disableRowSelectionOnClick
-          sx={{
-            flex: 1,
-            minHeight: 0,
-            height: "100%",
-            "& .MuiDataGrid-columnHeaders": {
-              backgroundColor: "rgb(248, 250, 252) !important",
-            },
-            "& .MuiDataGrid-columnHeaders .MuiDataGrid-columnHeader": {
-              backgroundColor: "rgb(248, 250, 252) !important",
-            },
-            "& .MuiDataGrid-cell": {
-              display: "flex",
-              alignItems: "center",
-            },
-            "& .MuiDataGrid-row": {
-              maxHeight: "none !important",
-            },
-            "& .MuiDataGrid-cellCheckbox, & .MuiDataGrid-columnHeaderCheckbox":
-              {
-                alignItems: "center",
-              },
-          }}
-        />
-      </Box>
+            {selectedIds.length > 0 && (
+              <Stack
+                direction="row"
+                alignItems="center"
+                spacing={2}
+                sx={{
+                  flexShrink: 0,
+                  py: 1,
+                  px: 1.5,
+                  backgroundColor: "action.selected",
+                }}
+              >
+                <Typography variant="body2" fontWeight={500}>
+                  {selectedIds.length} row{selectedIds.length !== 1 ? "s" : ""}{" "}
+                  selected
+                </Typography>
+                <Button
+                  size="small"
+                  color="error"
+                  variant="outlined"
+                  onClick={handleBulkDelete}
+                  disabled={bulkActionLoading}
+                  startIcon={<DeleteIcon />}
+                >
+                  {bulkActionLoading ? "Updating…" : "Delete"}
+                </Button>
+              </Stack>
+            )}
+            <DataGrid
+              rows={rows}
+              columns={columns}
+              loading={loading}
+              paginationMode="server"
+              rowCount={recordCount}
+              paginationModel={{ page, pageSize }}
+              onPaginationModelChange={(m) => {
+                setPage(m.page);
+                setPageSize(m.pageSize);
+              }}
+              pageSizeOptions={[10, 20, 50]}
+              checkboxSelection
+              rowSelectionModel={rowSelectionModel}
+              onRowSelectionModelChange={(newModel) =>
+                setRowSelectionModel(newModel)
+              }
+              disableRowSelectionOnClick
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                height: "100%",
+                "& .MuiDataGrid-columnHeaders": {
+                  backgroundColor: "rgb(248, 250, 252) !important",
+                },
+                "& .MuiDataGrid-columnHeaders .MuiDataGrid-columnHeader": {
+                  backgroundColor: "rgb(248, 250, 252) !important",
+                },
+                "& .MuiDataGrid-cell": {
+                  display: "flex",
+                  alignItems: "center",
+                },
+                "& .MuiDataGrid-row": {
+                  maxHeight: "none !important",
+                },
+                "& .MuiDataGrid-cellCheckbox, & .MuiDataGrid-columnHeaderCheckbox":
+                  {
+                    alignItems: "center",
+                  },
+              }}
+            />
+          </Box>
+        </>
+      )}
 
       <Dialog
         open={!!detailId}
@@ -1357,6 +1486,7 @@ export default function SubmissionsPage() {
               variant="contained"
               onClick={handleSave}
               disabled={saveLoading}
+              startIcon={<SaveIcon />}
               sx={{ fontWeight: 700, padding: "5px 24px" }}
             >
               {saveLoading ? "Saving..." : "Save"}
@@ -1364,6 +1494,7 @@ export default function SubmissionsPage() {
             <Button
               size="small"
               onClick={() => setDetailId(null)}
+              startIcon={<CloseIcon />}
               sx={{ fontWeight: 600 }}
             >
               Close
@@ -1719,6 +1850,7 @@ export default function SubmissionsPage() {
                           type="button"
                           variant="contained"
                           size="small"
+                          startIcon={<LocationOnIcon />}
                           sx={{ fontWeight: 700, alignSelf: "center" }}
                         >
                           View Location
@@ -3556,6 +3688,7 @@ export default function SubmissionsPage() {
                                       size="small"
                                       variant="outlined"
                                       component="label"
+                                      startIcon={<UploadFileIcon />}
                                       sx={{ fontWeight: 600 }}
                                     >
                                       Change file
@@ -3576,6 +3709,7 @@ export default function SubmissionsPage() {
                                     size="small"
                                     variant="outlined"
                                     component="label"
+                                    startIcon={<UploadFileIcon />}
                                     sx={{ fontWeight: 600 }}
                                   >
                                     Upload
@@ -3705,6 +3839,7 @@ export default function SubmissionsPage() {
                                       size="small"
                                       variant="outlined"
                                       component="label"
+                                      startIcon={<UploadFileIcon />}
                                       sx={{ fontWeight: 600 }}
                                     >
                                       Change file
@@ -3725,6 +3860,7 @@ export default function SubmissionsPage() {
                                     size="small"
                                     variant="outlined"
                                     component="label"
+                                    startIcon={<UploadFileIcon />}
                                     sx={{ fontWeight: 600 }}
                                   >
                                     Upload
@@ -3852,6 +3988,7 @@ export default function SubmissionsPage() {
                                       size="small"
                                       variant="outlined"
                                       component="label"
+                                      startIcon={<UploadFileIcon />}
                                       sx={{ fontWeight: 600 }}
                                     >
                                       Change file
@@ -3872,6 +4009,7 @@ export default function SubmissionsPage() {
                                     size="small"
                                     variant="outlined"
                                     component="label"
+                                    startIcon={<UploadFileIcon />}
                                     sx={{ fontWeight: 600 }}
                                   >
                                     Upload
@@ -3999,6 +4137,7 @@ export default function SubmissionsPage() {
                                       size="small"
                                       variant="outlined"
                                       component="label"
+                                      startIcon={<UploadFileIcon />}
                                       sx={{ fontWeight: 600 }}
                                     >
                                       Change file
@@ -4019,6 +4158,7 @@ export default function SubmissionsPage() {
                                     size="small"
                                     variant="outlined"
                                     component="label"
+                                    startIcon={<UploadFileIcon />}
                                     sx={{ fontWeight: 600 }}
                                   >
                                     Upload
@@ -4149,6 +4289,7 @@ export default function SubmissionsPage() {
                                       size="small"
                                       variant="outlined"
                                       component="label"
+                                      startIcon={<UploadFileIcon />}
                                       sx={{ fontWeight: 600 }}
                                     >
                                       Change file
@@ -4169,6 +4310,7 @@ export default function SubmissionsPage() {
                                     size="small"
                                     variant="outlined"
                                     component="label"
+                                    startIcon={<UploadFileIcon />}
                                     sx={{ fontWeight: 600 }}
                                   >
                                     Upload
@@ -4297,6 +4439,7 @@ export default function SubmissionsPage() {
                                       size="small"
                                       variant="outlined"
                                       component="label"
+                                      startIcon={<UploadFileIcon />}
                                       sx={{ fontWeight: 600 }}
                                     >
                                       Change file
@@ -4317,6 +4460,7 @@ export default function SubmissionsPage() {
                                     size="small"
                                     variant="outlined"
                                     component="label"
+                                    startIcon={<UploadFileIcon />}
                                     sx={{ fontWeight: 600 }}
                                   >
                                     Upload
@@ -4447,6 +4591,7 @@ export default function SubmissionsPage() {
                                       size="small"
                                       variant="outlined"
                                       component="label"
+                                      startIcon={<UploadFileIcon />}
                                       sx={{ fontWeight: 600 }}
                                     >
                                       Change file
@@ -4732,6 +4877,7 @@ export default function SubmissionsPage() {
                           >
                             <Button
                               variant="outlined"
+                              startIcon={<PrintIcon />}
                               onClick={() => {
                                 const target = document.getElementById(
                                   "passport-to-progress-print",
@@ -4772,7 +4918,9 @@ export default function SubmissionsPage() {
                                 )
                                   .map((s) => s.outerHTML)
                                   // Avoid copying @media print rules from the app.
-                                  .filter((html) => !html.includes("@media print"))
+                                  .filter(
+                                    (html) => !html.includes("@media print"),
+                                  )
                                   .join("");
 
                                 const linkHtml = Array.from(
@@ -4834,7 +4982,8 @@ export default function SubmissionsPage() {
                                     await waitForImages();
                                     // Safari sometimes needs focus.
                                     if (iframe.contentWindow) {
-                                      iframe.contentWindow.onafterprint = cleanup;
+                                      iframe.contentWindow.onafterprint =
+                                        cleanup;
                                       iframe.contentWindow.focus();
                                       iframe.contentWindow.print();
                                     }
@@ -5069,6 +5218,7 @@ export default function SubmissionsPage() {
                 variant="outlined"
                 onClick={() => setExportDialogOpen(false)}
                 disabled={exportLoading}
+                startIcon={<CancelIcon />}
               >
                 Cancel
               </Button>
@@ -5077,6 +5227,7 @@ export default function SubmissionsPage() {
                 variant="contained"
                 onClick={handleExportExcel}
                 disabled={exportLoading}
+                startIcon={<FileDownloadIcon />}
                 sx={{
                   fontWeight: 800,
                   bgcolor: "#0CA65A",
@@ -5086,6 +5237,78 @@ export default function SubmissionsPage() {
                 }}
               >
                 {exportLoading ? "Exporting..." : "Export"}
+              </Button>
+            </Box>
+          </Stack>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={priceDialogOpen}
+        onClose={() => setPriceDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle
+          sx={{
+            borderBottom: `1px solid ${adminColors.borderLight}`,
+            py: 2,
+            fontWeight: 800,
+          }}
+        >
+          Update Price
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Price"
+              type="number"
+              size="small"
+              value={priceValue}
+              onChange={(e) => setPriceValue(e.target.value)}
+              disabled={priceUpdating}
+              inputProps={{ min: 0, step: 1 }}
+              fullWidth
+            />
+
+            {priceDialogError && (
+              <Typography color="error" sx={{ fontSize: 13 }}>
+                {priceDialogError}
+              </Typography>
+            )}
+
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 1,
+                mt: 1,
+              }}
+            >
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => setPriceDialogOpen(false)}
+                disabled={priceUpdating}
+                startIcon={<CancelIcon />}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="small"
+                variant="contained"
+                onClick={handleUpdatePrice}
+                disabled={priceUpdating}
+                startIcon={<CurrencyRupeeIcon />}
+                sx={{
+                  fontWeight: 800,
+                  bgcolor: "#0CA65A",
+                  "&:hover": {
+                    bgcolor: "#038947",
+                  },
+                }}
+              >
+                {priceUpdating ? "Updating..." : "Update"}
               </Button>
             </Box>
           </Stack>
@@ -5106,7 +5329,11 @@ export default function SubmissionsPage() {
           }}
         >
           Deleted Records
-          <Button size="small" onClick={() => setDeletedDialogOpen(false)}>
+          <Button
+            size="small"
+            onClick={() => setDeletedDialogOpen(false)}
+            startIcon={<CloseIcon />}
+          >
             Close
           </Button>
         </DialogTitle>
