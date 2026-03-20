@@ -4925,10 +4925,22 @@ export default function SubmissionsPage() {
                                     'link[rel="stylesheet"]',
                                   ),
                                 )
-                                  .map((l) => l.outerHTML)
+                                  .map((l) => {
+                                    const href = (l as HTMLLinkElement).getAttribute("href");
+                                    if (!href) return "";
+                                    const absHref = new URL(
+                                      href,
+                                      document.baseURI,
+                                    ).toString();
+                                    const media = (l as HTMLLinkElement).media?.trim();
+                                    return `<link rel="stylesheet" href="${absHref}"${
+                                      media ? ` media="${media}"` : ""
+                                    } />`;
+                                  })
                                   .join("");
 
-                                const baseHref = window.location.origin + "/";
+                                // Use the document base so stylesheet URLs resolve correctly on server (reverse proxies/subpaths).
+                                const baseHref = new URL("/", document.baseURI).toString();
 
                                 doc.open();
                                 doc.write(`
