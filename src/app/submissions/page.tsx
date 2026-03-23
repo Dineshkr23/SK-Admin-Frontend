@@ -190,6 +190,69 @@ function toEditable(d: SubmissionDetail | null): EditableDetail {
   return out;
 }
 
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function buildPassportHtml(f: EditableDetail): string {
+  const name = toUpperText(
+    `${f.pi_firstName ?? ""} ${f.pi_lastName ?? ""}`.trim(),
+  );
+  const addr1 = toUpperText(f.pi_addressLane1 ?? "—");
+  const addr2 = toUpperText(f.pi_addressLane2 ?? "");
+  const pincode = toUpperText(f.pi_pincode ?? "—");
+  const city = toUpperText(f.pi_city ?? "—");
+  const state = toUpperText(f.pi_state ?? "—");
+  const landmark = toUpperText(f.pi_landmark ?? "—");
+  const phone = toUpperText(f.pi_phone ?? "—");
+  const dob = toUpperText(formatDateToDMY(f.pi_dob));
+  const opArea = toUpperText(f.pi_city ?? "—");
+  const regBy = toUpperText(f.ref_nameOfTheperson ?? "—");
+  const passportNo = f.skPassportNo ?? "—";
+  const photoSrc =
+    getImageSrc(f.photoProofPath as string, f.photoProofData as string) ?? "";
+
+  const rulerRow = (content: string) => `
+    <div style="border-bottom:2px solid #0b0b0b;padding-bottom:5.2px;margin-bottom:4.8px">
+      <div style="font-weight:400">${content}</div>
+    </div>`;
+
+  const chevrons = "&lt;".repeat(27);
+
+  return `
+  <div style="width:700px;max-width:100%;margin:0 auto;background-color:#D6F4FA;border:none;padding:12px;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid">
+    <div style="font-weight:400;font-size:18px;text-align:center;border-bottom:2px solid #0b0b0b;padding-bottom:6.4px;margin-bottom:4px;line-height:1.1">
+      SK SUPER TMT PASSPORT TO PROGRESS
+    </div>
+    <div style="font-weight:800;font-size:16px;text-align:right;padding-right:8px">
+      Passport No. ${escHtml(String(passportNo))}
+    </div>
+    <div style="margin-top:8px;display:grid;grid-template-columns:210px 1fr;gap:8px">
+      <img src="${escHtml(photoSrc)}" alt="Photograph" style="width:200px;height:230px;object-fit:cover;border:1px solid rgba(0,0,0,0.15);background-color:#ffffff" />
+      <div style="font-size:14px;line-height:1.35">
+        ${rulerRow(`Name: ${escHtml(name)}`)}
+        ${rulerRow(escHtml(addr1))}
+        ${rulerRow(escHtml(addr2))}
+        ${rulerRow(`Pincode: ${escHtml(pincode)} <span>City: ${escHtml(city)}</span> <span style="margin-left:8px">State: ${escHtml(state)}</span>`)}
+        ${rulerRow(`Landmark: ${escHtml(landmark)}`)}
+        ${rulerRow(`Mobile Number: ${escHtml(phone)} <span style="margin-left:8px">DOB: ${escHtml(dob)}</span>`)}
+        <div style="margin-top:4.8px;display:flex;justify-content:space-between;gap:16px">
+          <div style="font-size:13px;font-weight:400">Operational Area: ${escHtml(opArea)}</div>
+          <div style="font-size:13px;font-weight:400">Reg. By: ${escHtml(regBy)}</div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:9.6px;font-weight:900;font-family:monospace;font-size:16px;text-align:center">
+      <div style="white-space:pre;font-size:18px;letter-spacing:2px;font-weight:900">${chevrons}</div>
+      <div style="white-space:pre;font-size:18px;letter-spacing:2px;font-weight:900">${chevrons}</div>
+    </div>
+  </div>`;
+}
+
 function buildUpdatePayload(form: EditableDetail): Partial<SubmissionDetail> {
   const payload: Record<string, unknown> = {};
   const keys = [
@@ -401,6 +464,7 @@ export default function SubmissionsPage() {
   const [rowSelectionModel, setRowSelectionModel] =
     useState<GridRowSelectionModel>({ type: "include", ids: new Set() });
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [bulkPrintLoading, setBulkPrintLoading] = useState(false);
   const [deletedDialogOpen, setDeletedDialogOpen] = useState(false);
   const [deletedRows, setDeletedRows] = useState<TableRecord[]>([]);
   const [deletedRecordCount, setDeletedRecordCount] = useState(0);
@@ -894,6 +958,63 @@ export default function SubmissionsPage() {
     }
   };
 
+  const handleBulkPrint = async () => {
+    if (selectedIds.length === 0) return;
+    setBulkPrintLoading(true);
+    try {
+      const details = await Promise.all(
+        selectedIds.map((id) => fetchSubmissionById(id)),
+      );
+      const forms = details.map((d) => toEditable(d));
+      const passportsHtml = forms
+        .map(
+          (f) =>
+            `<div style="page-break-inside:avoid;margin-bottom:12px">${buildPassportHtml(f)}</div>`,
+        )
+        .join("\n");
+
+      const html = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Bulk Passports</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 10mm;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+  </style>
+</head>
+<body>
+  ${passportsHtml}
+  <script>
+    window.onload = function() {
+      window.focus();
+      window.print();
+    };
+    window.onafterprint = function() {
+      window.close();
+    };
+  </script>
+</body>
+</html>`;
+      const blob = new Blob([html], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener");
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setBulkPrintLoading(false);
+    }
+  };
+
   const ROW_STATUS_OPTIONS = [
     { label: "Pending", value: "pending" },
     { label: "Approved", value: "approved" },
@@ -1081,10 +1202,10 @@ export default function SubmissionsPage() {
     },
     { field: "passportNo", headerName: "Passport No", width: 115 },
     { field: "firstName", headerName: "Name", flex: 1, minWidth: 130 },
-    { field: "city", headerName: "City", width: 110 },
+    { field: "city", headerName: "City", width: 160 },
     { field: "phoneNumber", headerName: "Phone", width: 120 },
     { field: "profession", headerName: "Profession", width: 110 },
-    { field: "place", headerName: "Place", width: 110 },
+    { field: "place", headerName: "Place", width: 160 },
     {
       field: "registeringDate",
       headerName: "Date",
@@ -1092,7 +1213,13 @@ export default function SubmissionsPage() {
       valueFormatter: (v) =>
         v ? new Date(v as string).toLocaleDateString() : "",
     },
-    { field: "refNameOfThePerson", headerName: "Sales Officer", width: 130 },
+    { field: "refNameOfThePerson", headerName: "Sales Officer", width: 160 },
+    {
+      field: "reportingManagerName",
+      headerName: "Reporting Manager",
+      width: 160,
+      valueFormatter: (v) => (v ? String(v) : "-"),
+    },
     {
       field: "actions",
       headerName: "View",
@@ -1407,6 +1534,15 @@ export default function SubmissionsPage() {
                   startIcon={<DeleteIcon />}
                 >
                   {bulkActionLoading ? "Updating…" : "Delete"}
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={handleBulkPrint}
+                  disabled={bulkPrintLoading}
+                  startIcon={<PrintIcon />}
+                >
+                  {bulkPrintLoading ? "Loading…" : "Print"}
                 </Button>
               </Stack>
             )}

@@ -74,6 +74,7 @@ export type TableRecord = {
   enteredBy: string | null;
   enteredDate: string | null;
   refNameOfThePerson: string | null;
+  reportingManagerName: string | null;
   isApproved: boolean | null;
   isContacted: boolean | null;
   isRejected: boolean | null;
