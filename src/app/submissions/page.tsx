@@ -4884,6 +4884,19 @@ export default function SubmissionsPage() {
                                 );
                                 if (!source) return;
 
+                                const passportNoForFile =
+                                  String(form.skPassportNo ?? "").trim() ||
+                                  "passport-to-progress";
+                                const safeFileName = passportNoForFile.replace(
+                                  /[\\/:*?"<>|]/g,
+                                  "_",
+                                );
+
+                                const rect = source.getBoundingClientRect();
+                                const PX_PER_MM = 3.7795275591;
+                                const wMm = Math.ceil(rect.width / PX_PER_MM);
+                                const hMm = Math.ceil(rect.height / PX_PER_MM);
+
                                 const inlineComputedStyles = (
                                   src: Element,
                                   dst: Element,
@@ -4899,7 +4912,11 @@ export default function SubmissionsPage() {
                                       );
                                     }
                                   }
-                                  for (let i = 0; i < src.children.length; i++) {
+                                  for (
+                                    let i = 0;
+                                    i < src.children.length;
+                                    i++
+                                  ) {
                                     if (dst.children[i]) {
                                       inlineComputedStyles(
                                         src.children[i],
@@ -4909,67 +4926,63 @@ export default function SubmissionsPage() {
                                   }
                                 };
 
-                                const clone = source.cloneNode(true) as HTMLElement;
+                                const clone = source.cloneNode(
+                                  true,
+                                ) as HTMLElement;
                                 clone.removeAttribute("id");
                                 inlineComputedStyles(source, clone);
 
-                                const wrapper = document.createElement("div");
-                                wrapper.id = "__passport-print-wrapper__";
-                                wrapper.style.display = "none";
-                                wrapper.appendChild(clone);
-                                document.body.appendChild(wrapper);
+                                clone.style.margin = "0";
+                                clone.style.marginLeft = "0";
+                                clone.style.marginRight = "0";
+                                clone.style.width = "100%";
+                                clone.style.maxWidth = "100%";
+                                clone.style.position = "relative";
+                                clone.style.left = "0";
+                                clone.style.top = "0";
+                                clone.style.transform = "none";
+                                clone.style.boxSizing = "border-box";
 
-                                const styleId = "__passport-print-style__";
-                                document.getElementById(styleId)?.remove();
-                                const style = document.createElement("style");
-                                style.id = styleId;
-                                style.textContent = `
-                                  @media print {
-                                    html, body {
-                                      margin: 0 !important;
-                                      padding: 0 !important;
-                                    }
-                                    body > *:not(#__passport-print-wrapper__) {
-                                      display: none !important;
-                                    }
-                                    #__passport-print-wrapper__ {
-                                      display: block !important;
-                                      width: 100% !important;
-                                      margin: 0 !important;
-                                      padding: 0 !important;
-                                      -webkit-print-color-adjust: exact !important;
-                                      print-color-adjust: exact !important;
-                                    }
-                                    #__passport-print-wrapper__ > * {
-                                      width: 100% !important;
-                                      max-width: 100% !important;
-                                      margin: 0 auto !important;
-                                      box-sizing: border-box !important;
-                                    }
-                                    @page { margin: 10mm; }
-                                  }
-                                `;
-                                document.head.appendChild(style);
-
-                                const previousTitle = document.title;
-                                const passportNoForFile =
-                                  String(form.skPassportNo ?? "").trim() ||
-                                  "passport-to-progress";
-                                const safeFileName = passportNoForFile.replace(
-                                  /[\\/:*?"<>|]/g,
-                                  "_",
-                                );
-                                document.title = safeFileName;
-
-                                const cleanup = () => {
-                                  wrapper.remove();
-                                  style.remove();
-                                  document.title = previousTitle;
-                                  window.removeEventListener("afterprint", cleanup);
-                                };
-                                window.addEventListener("afterprint", cleanup);
-
-                                window.print();
+                                const html = `<!DOCTYPE html>
+<html>
+<head>
+  <title>${safeFileName}</title>
+  <style>
+    @page {
+      size: ${wMm}mm ${hMm}mm;
+      margin: 0;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: ${wMm}mm;
+      height: ${hMm}mm;
+      overflow: hidden;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+  </style>
+</head>
+<body>
+  ${clone.outerHTML}
+  <script>
+    window.onload = function() {
+      window.focus();
+      window.print();
+    };
+    window.onafterprint = function() {
+      window.close();
+    };
+  </script>
+</body>
+</html>`;
+                                const blob = new Blob([html], {
+                                  type: "text/html",
+                                });
+                                const url = URL.createObjectURL(blob);
+                                window.open(url, "_blank", "noopener");
+                                URL.revokeObjectURL(url);
                               }}
                               sx={{
                                 fontWeight: 800,
