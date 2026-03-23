@@ -4925,22 +4925,46 @@ export default function SubmissionsPage() {
                                 style.id = styleId;
                                 style.textContent = `
                                   @media print {
+                                    html, body {
+                                      margin: 0 !important;
+                                      padding: 0 !important;
+                                    }
                                     body > *:not(#__passport-print-wrapper__) {
                                       display: none !important;
                                     }
                                     #__passport-print-wrapper__ {
                                       display: block !important;
+                                      width: 100% !important;
+                                      margin: 0 !important;
+                                      padding: 0 !important;
                                       -webkit-print-color-adjust: exact !important;
                                       print-color-adjust: exact !important;
+                                    }
+                                    #__passport-print-wrapper__ > * {
+                                      width: 100% !important;
+                                      max-width: 100% !important;
+                                      margin: 0 auto !important;
+                                      box-sizing: border-box !important;
                                     }
                                     @page { margin: 10mm; }
                                   }
                                 `;
                                 document.head.appendChild(style);
 
+                                const previousTitle = document.title;
+                                const passportNoForFile =
+                                  String(form.skPassportNo ?? "").trim() ||
+                                  "passport-to-progress";
+                                const safeFileName = passportNoForFile.replace(
+                                  /[\\/:*?"<>|]/g,
+                                  "_",
+                                );
+                                document.title = safeFileName;
+
                                 const cleanup = () => {
                                   wrapper.remove();
                                   style.remove();
+                                  document.title = previousTitle;
                                   window.removeEventListener("afterprint", cleanup);
                                 };
                                 window.addEventListener("afterprint", cleanup);
