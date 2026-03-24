@@ -152,6 +152,8 @@ export async function exportSubmissionsExcel(params: {
   dateFrom?: string;
   dateTo?: string;
   formTypes?: string; // comma-separated or a single formType
+  salesOfficer?: string;
+  reportingManager?: string;
 }): Promise<{ blob: Blob; filename: string }> {
   const token = getToken();
   if (!token) throw new Error('Unauthorized');
@@ -166,6 +168,10 @@ export async function exportSubmissionsExcel(params: {
       ...(params.dateFrom ? { dateFrom: params.dateFrom } : {}),
       ...(params.dateTo ? { dateTo: params.dateTo } : {}),
       ...(params.formTypes ? { formTypes: params.formTypes } : {}),
+      ...(params.salesOfficer ? { salesOfficer: params.salesOfficer } : {}),
+      ...(params.reportingManager
+        ? { reportingManager: params.reportingManager }
+        : {}),
     }),
   });
 

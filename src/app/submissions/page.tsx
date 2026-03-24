@@ -484,6 +484,10 @@ export default function SubmissionsPage() {
   const [exportFrom, setExportFrom] = useState("");
   const [exportTo, setExportTo] = useState("");
   const [exportFormType, setExportFormType] = useState("");
+  const [exportSalesOfficer, setExportSalesOfficer] = useState<string[]>([]);
+  const [exportReportingManager, setExportReportingManager] = useState<
+    string[]
+  >([]);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -535,6 +539,8 @@ export default function SubmissionsPage() {
     setExportFrom(dateFrom);
     setExportTo(dateTo);
     setExportFormType("");
+    setExportSalesOfficer([]);
+    setExportReportingManager([]);
     setExportError(null);
     setExportDialogOpen(true);
   };
@@ -548,6 +554,14 @@ export default function SubmissionsPage() {
         dateFrom: exportFrom || undefined,
         dateTo: exportTo || undefined,
         formTypes: exportFormType || undefined,
+        salesOfficer:
+          exportSalesOfficer.length > 0
+            ? exportSalesOfficer.join(",")
+            : undefined,
+        reportingManager:
+          exportReportingManager.length > 0
+            ? exportReportingManager.join(",")
+            : undefined,
       });
 
       const url = URL.createObjectURL(blob);
@@ -5318,6 +5332,54 @@ export default function SubmissionsPage() {
                 ))}
               </Select>
             </FormControl>
+            <Autocomplete
+              multiple
+              options={salesOfficerOptions}
+              value={exportSalesOfficer}
+              onChange={(_, value) => setExportSalesOfficer(value)}
+              sx={{
+                "& .MuiOutlinedInput-root": { bgcolor: "#fff !important" },
+              }}
+              slotProps={{
+                paper: { sx: { bgcolor: "#fff" } },
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label="Sales Officer"
+                  placeholder={
+                    exportSalesOfficer.length === 0
+                      ? "All Sales Officers"
+                      : undefined
+                  }
+                />
+              )}
+            />
+            <Autocomplete
+              multiple
+              options={reportingManagerOptions}
+              value={exportReportingManager}
+              onChange={(_, value) => setExportReportingManager(value)}
+              sx={{
+                "& .MuiOutlinedInput-root": { bgcolor: "#fff !important" },
+              }}
+              slotProps={{
+                paper: { sx: { bgcolor: "#fff" } },
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label="Reporting Manager"
+                  placeholder={
+                    exportReportingManager.length === 0
+                      ? "All Reporting Managers"
+                      : undefined
+                  }
+                />
+              )}
+            />
 
             {exportError && (
               <Typography color="error" sx={{ fontSize: 13 }}>
