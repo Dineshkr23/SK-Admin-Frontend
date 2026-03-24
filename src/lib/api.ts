@@ -41,6 +41,31 @@ export async function api<T>(
   return res.text() as Promise<T>;
 }
 
+async function publicApi<T>(
+  path: string,
+  options: RequestInit & { params?: Record<string, string> } = {}
+): Promise<T> {
+  const { params, ...init } = options;
+  const url = new URL(path, API_URL);
+  if (params) {
+    Object.entries(params).forEach(([k, v]) => {
+      if (v != null && v !== '') url.searchParams.set(k, v);
+    });
+  }
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...init.headers,
+  };
+  const res = await fetch(url.toString(), { ...init, headers });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  const contentType = res.headers.get('content-type');
+  if (contentType?.includes('application/json')) return res.json() as Promise<T>;
+  return res.text() as Promise<T>;
+}
+
 export async function login(email: string, password: string): Promise<{ access_token: string }> {
   const res = await fetch(`${API_URL}/auth/login`, {
     method: 'POST',
@@ -225,7 +250,7 @@ export async function bulkUpdateSubmissions(
 }
 
 export async function fetchGlobalPrice(): Promise<{ price: number }> {
-  return api<{ price: number }>('/admin/price');
+  return publicApi<{ price: number }>('/admin/price');
 }
 
 export async function updateGlobalPrice(price: number): Promise<{ price: number }> {
