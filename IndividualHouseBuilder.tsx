@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 const GOOGLE_GEOCODE_KEY = "AIzaSyDm7XyTys-cDc5ne0Poqhp1euERvFcMQGk";
-const SK_BACKEND_URL = "https://sk-backend.emovur.com";
+const SK_BACKEND_URL = "https://backend.sksupertmt.com";
 
 function IndHouseForm() {
   const [viewportWidth, setViewportWidth] = useState<number>(
@@ -23,8 +23,18 @@ function IndHouseForm() {
   const [invalidFieldName, setInvalidFieldName] = useState("");
   const [talukOptions, setTalukOptions] = useState<string[]>([]);
   const [selectedTaluk, setSelectedTaluk] = useState("");
+  const [whatsAppNumber, setWhatsAppNumber] = useState("");
+  const [isSameAsAbove, setIsSameAsAbove] = useState(false);
+  const [phoneNumberInput, setPhoneNumberInput] = useState("");
+  const [phoneAvailability, setPhoneAvailability] = useState({
+    checking: false,
+    exists: false,
+    status: "",
+  });
   const formRef = useRef<HTMLFormElement | null>(null);
   const lastResolvedPincodeRef = useRef("");
+  const submitInFlightRef = useRef(false);
+  const phoneCheckTimerRef = useRef<number | null>(null);
 
   const isMobile = viewportWidth < 768;
   const isTablet = viewportWidth >= 768 && viewportWidth < 1100;
@@ -261,9 +271,14 @@ function IndHouseForm() {
     setFieldErrors({ [fieldName]: message });
     focusAndScrollToField(fieldName);
   };
+  const normalizePhone = (value: string): string => value.replace(/\D/g, "").slice(-10);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submitInFlightRef.current) {
+      return;
+    }
+    submitInFlightRef.current = true;
     setFieldErrors({});
     setInvalidFieldName("");
 
@@ -460,6 +475,11 @@ function IndHouseForm() {
       setValidationError("emailId", "Enter a valid Email Id.");
       return;
     }
+    if (phoneAvailability.exists) {
+      setValidationError("phoneNumber", "Phone number is already registered.");
+      submitInFlightRef.current = false;
+      return;
+    }
 
     setSubmitState({
       submitting: true,
@@ -468,6 +488,7 @@ function IndHouseForm() {
     });
 
     try {
+      const idempotencyKey = `fs-${Date.now()}-${crypto.randomUUID()}`;
       const backendPayload = {
         formType: "individual" as const,
         title: payload.honorifics || undefined,
@@ -503,6 +524,7 @@ function IndHouseForm() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
         },
         body: JSON.stringify(backendPayload),
       });
@@ -533,6 +555,8 @@ function IndHouseForm() {
             : "Unable to submit registration.",
         isSuccess: false,
       });
+    } finally {
+      submitInFlightRef.current = false;
     }
   };
 
@@ -542,6 +566,56 @@ function IndHouseForm() {
       input.value = sanitizedValue;
     }
   };
+
+  useEffect(() => {
+    const normalizedPhone = normalizePhone(phoneNumberInput);
+    if (phoneCheckTimerRef.current) {
+      window.clearTimeout(phoneCheckTimerRef.current);
+      phoneCheckTimerRef.current = null;
+    }
+    if (normalizedPhone.length !== 10) {
+      setPhoneAvailability({
+        checking: false,
+        exists: false,
+        status: "",
+      });
+      return;
+    }
+    setPhoneAvailability({
+      checking: true,
+      exists: false,
+      status: "Checking phone number...",
+    });
+    phoneCheckTimerRef.current = window.setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `${SK_BACKEND_URL}/form-submissions/phone-status?phone=${encodeURIComponent(normalizedPhone)}`,
+        );
+        const responseBody = (await response.json().catch(() => null)) as unknown;
+        const exists =
+          isRecord(responseBody) && typeof responseBody.exists === "boolean"
+            ? responseBody.exists
+            : false;
+        setPhoneAvailability({
+          checking: false,
+          exists,
+          status: exists ? "Phone number is already registered." : "",
+        });
+      } catch {
+        setPhoneAvailability({
+          checking: false,
+          exists: false,
+          status: "Unable to verify phone number right now.",
+        });
+      }
+    }, 350);
+    return () => {
+      if (phoneCheckTimerRef.current) {
+        window.clearTimeout(phoneCheckTimerRef.current);
+        phoneCheckTimerRef.current = null;
+      }
+    };
+  }, [phoneNumberInput]);
 
   return (
     <main
@@ -676,12 +750,32 @@ function IndHouseForm() {
                 style={getFieldStyleWithError("phoneNumber")}
                 inputMode="numeric"
                 maxLength={10}
+                onChange={(event) => {
+                  setPhoneNumberInput(event.target.value);
+                  if (isSameAsAbove) {
+                    setWhatsAppNumber(event.target.value);
+                  }
+                }}
                 onInput={(event) =>
                   sanitizeNumericInput(event.currentTarget, 10)
                 }
               />
               {fieldErrors.phoneNumber && (
                 <p style={fieldErrorTextStyle}>{fieldErrors.phoneNumber}</p>
+              )}
+              {!fieldErrors.phoneNumber && phoneAvailability.status && (
+                <p
+                  style={{
+                    ...fieldErrorTextStyle,
+                    color: phoneAvailability.checking
+                      ? "#175cd3"
+                      : phoneAvailability.exists
+                        ? "#b42318"
+                        : "#067647",
+                  }}
+                >
+                  {phoneAvailability.status}
+                </p>
               )}
             </div>
           </div>
@@ -694,6 +788,8 @@ function IndHouseForm() {
                 style={getFieldStyleWithError("whatsappNumber")}
                 inputMode="numeric"
                 maxLength={10}
+                value={whatsAppNumber}
+                onChange={(event) => setWhatsAppNumber(event.target.value)}
                 onInput={(event) =>
                   sanitizeNumericInput(event.currentTarget, 10)
                 }
@@ -717,7 +813,18 @@ function IndHouseForm() {
           </div>
 
           <label style={checkboxLineStyle}>
-            <input type="checkbox" name="sameAsAbove" />
+            <input
+              type="checkbox"
+              name="sameAsAbove"
+              checked={isSameAsAbove}
+              onChange={(event) => {
+                const checked = event.target.checked;
+                setIsSameAsAbove(checked);
+                if (checked) {
+                  setWhatsAppNumber(phoneNumberInput);
+                }
+              }}
+            />
             <span>Same as above</span>
           </label>
 
@@ -989,15 +1096,33 @@ function IndHouseForm() {
                 }}
                 onClick={() => setDeclarationChoice("disagree")}
               >
-                I don't Agree
+                I don&apos;t Agree
               </button>
             </div>
 
             {declarationChoice === "agree" && (
               <button
                 type="submit"
-                style={submitButtonStyle}
-                disabled={submitState.submitting}
+                style={{
+                  ...submitButtonStyle,
+                  backgroundColor:
+                    submitState.submitting ||
+                    phoneAvailability.checking ||
+                    phoneAvailability.exists
+                      ? "#98a2b3"
+                      : submitButtonStyle.backgroundColor,
+                  cursor:
+                    submitState.submitting ||
+                    phoneAvailability.checking ||
+                    phoneAvailability.exists
+                      ? "not-allowed"
+                      : "pointer",
+                }}
+                disabled={
+                  submitState.submitting ||
+                  phoneAvailability.checking ||
+                  phoneAvailability.exists
+                }
               >
                 {submitState.submitting ? "Submitting..." : "Submit"}
               </button>

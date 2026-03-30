@@ -48,7 +48,7 @@ type OfficePincodeLookupState = {
   isSuccess: boolean;
 };
 
-const SK_BACKEND_URL = "https://sk-backend.emovur.com";
+const SK_BACKEND_URL = "https://backend.sksupertmt.com";
 
 const createOtpState = (): OtpVerificationState => ({
   phoneNumber: "",
@@ -115,6 +115,16 @@ function SkDealer() {
   const [childDob2, setChildDob2] = useState("");
   const [childDob3, setChildDob3] = useState("");
   const todayDate = new Date().toISOString().split("T")[0];
+  const submitInFlightRef = useRef(false);
+  const phoneCheckTimerRef = useRef<number | null>(null);
+  const [cameraFacingMode, setCameraFacingMode] = useState<"environment" | "user">(
+    "environment",
+  );
+  const [phoneAvailability, setPhoneAvailability] = useState({
+    checking: false,
+    exists: false,
+    status: "",
+  });
 
   const responsiveGridTwo = {
     ...gridTwo,
@@ -148,12 +158,18 @@ function SkDealer() {
 
   const submitButtonStyle = {
     border: "none",
-    backgroundColor: "#d11b1b",
+    backgroundColor:
+      submitState.submitting || phoneAvailability.checking || phoneAvailability.exists
+        ? "#98a2b3"
+        : "#d11b1b",
     color: "#ffffff",
     padding: isMobile ? "12px 20px" : "10px 34px",
     fontWeight: 700,
     borderRadius: 10,
-    cursor: "pointer",
+    cursor:
+      submitState.submitting || phoneAvailability.checking || phoneAvailability.exists
+        ? "not-allowed"
+        : "pointer",
     opacity: submitState.submitting ? 0.8 : 1,
     width: isMobile ? "100%" : "auto",
     minWidth: isMobile ? "100%" : 140,
@@ -171,6 +187,11 @@ function SkDealer() {
   const isValidIndianPhone = (value: string): boolean => /^\d{10}$/.test(value);
   const isValidIndianPincode = (value: string): boolean =>
     /^\d{6}$/.test(value);
+  const normalizePhone = (value: string): string => value.replace(/\D/g, "").slice(-10);
+  const canShowOtpControls =
+    normalizePhone(otpState.phoneNumber).length === 10 &&
+    !phoneAvailability.checking &&
+    !phoneAvailability.exists;
 
   const getFormInputElement = (name: string): HTMLInputElement | null => {
     if (!formRef.current) {
@@ -371,6 +392,9 @@ function SkDealer() {
     if (!otpState.isValidated) {
       return "Please validate OTP before submitting the form.";
     }
+    if (phoneAvailability.exists) {
+      return "Phone number is already registered.";
+    }
 
     if (declarationChoice !== "agree") {
       return "Please agree to the declaration before submitting.";
@@ -400,6 +424,10 @@ function SkDealer() {
 
   const handleMasonSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submitInFlightRef.current) {
+      return;
+    }
+    submitInFlightRef.current = true;
 
     const formData = new FormData(event.currentTarget);
     setFormValidationError("");
@@ -422,16 +450,20 @@ function SkDealer() {
     });
 
     try {
+      const idempotencyKey = `fs-${Date.now()}-${crypto.randomUUID()}`;
       const backendPayload = {
         formType: "dealer" as const,
         validationCode: getFieldValue(formData, "validationCode") || undefined,
-        pi_firstName: getFieldValue(formData, "contactPerson") || getFieldValue(formData, "dealershipName"),
+        pi_firstName:
+          getFieldValue(formData, "contactPerson") ||
+          getFieldValue(formData, "dealershipName"),
         pi_lastName: "",
         pi_profession: getFieldValue(formData, "ownershipType") || "Proprietor",
         pi_phone: getFieldValue(formData, "mobileNumber"),
         pi_emailId: getFieldValue(formData, "emailId") || undefined,
         pi_addressLane1: getFieldValue(formData, "officeAddressLine1"),
-        pi_addressLane2: getFieldValue(formData, "officeAddressLine2") || undefined,
+        pi_addressLane2:
+          getFieldValue(formData, "officeAddressLine2") || undefined,
         pi_city: getFieldValue(formData, "city"),
         pi_state: getFieldValue(formData, "state"),
         pi_pincode: getFieldValue(formData, "postalCode") || undefined,
@@ -452,19 +484,28 @@ function SkDealer() {
         ownerTitle: getFieldValue(formData, "ownerTitle") || undefined,
         ownerFirstName: getFieldValue(formData, "ownerFirstName") || undefined,
         ownerLastName: getFieldValue(formData, "ownerLastName") || undefined,
-        ownerOfficeAddressLine1: getFieldValue(formData, "ownerOfficeAddressLine1") || undefined,
-        ownerOfficeAddressLine2: getFieldValue(formData, "ownerOfficeAddressLine2") || undefined,
+        ownerOfficeAddressLine1:
+          getFieldValue(formData, "ownerOfficeAddressLine1") || undefined,
+        ownerOfficeAddressLine2:
+          getFieldValue(formData, "ownerOfficeAddressLine2") || undefined,
         ownerCity: getFieldValue(formData, "ownerCity") || undefined,
         ownerState: getFieldValue(formData, "ownerState") || undefined,
-        ownerPostalCode: getFieldValue(formData, "ownerPostalCode") || undefined,
+        ownerPostalCode:
+          getFieldValue(formData, "ownerPostalCode") || undefined,
         ownerPlace: getFieldValue(formData, "ownerPlace") || undefined,
-        ownerPhoneNumber: getFieldValue(formData, "ownerPhoneNumber") || undefined,
+        ownerPhoneNumber:
+          getFieldValue(formData, "ownerPhoneNumber") || undefined,
         ownerEmailId: getFieldValue(formData, "ownerEmailId") || undefined,
-        secondContactTitle: getFieldValue(formData, "secondContactTitle") || undefined,
-        secondContactFirstName: getFieldValue(formData, "secondContactFirstName") || undefined,
-        secondContactLastName: getFieldValue(formData, "secondContactLastName") || undefined,
-        secondContactPhone: getFieldValue(formData, "secondContactPhone") || undefined,
-        secondContactEmail: getFieldValue(formData, "secondContactEmail") || undefined,
+        secondContactTitle:
+          getFieldValue(formData, "secondContactTitle") || undefined,
+        secondContactFirstName:
+          getFieldValue(formData, "secondContactFirstName") || undefined,
+        secondContactLastName:
+          getFieldValue(formData, "secondContactLastName") || undefined,
+        secondContactPhone:
+          getFieldValue(formData, "secondContactPhone") || undefined,
+        secondContactEmail:
+          getFieldValue(formData, "secondContactEmail") || undefined,
         spouseName: getFieldValue(formData, "spouseName") || undefined,
         spouseDob: spouseDob || undefined,
         weddingDay: weddingDay || undefined,
@@ -475,19 +516,28 @@ function SkDealer() {
         childName3: getFieldValue(formData, "childName3") || undefined,
         childDob3: childDob3 || undefined,
         godownSameAsCompany: formData.get("godownSameAsCompany") === "on",
-        godownAddressLine1: getFieldValue(formData, "godownAddressLine1") || undefined,
-        godownAddressLine2: getFieldValue(formData, "godownAddressLine2") || undefined,
+        godownAddressLine1:
+          getFieldValue(formData, "godownAddressLine1") || undefined,
+        godownAddressLine2:
+          getFieldValue(formData, "godownAddressLine2") || undefined,
         godownCity: getFieldValue(formData, "godownCity") || undefined,
         godownState: getFieldValue(formData, "godownState") || undefined,
-        godownPostalCode: getFieldValue(formData, "godownPostalCode") || undefined,
-        godownContactPerson: getFieldValue(formData, "godownContactPerson") || undefined,
-        godownContactMobile: getFieldValue(formData, "godownContactMobile") || undefined,
+        godownPostalCode:
+          getFieldValue(formData, "godownPostalCode") || undefined,
+        godownContactPerson:
+          getFieldValue(formData, "godownContactPerson") || undefined,
+        godownContactMobile:
+          getFieldValue(formData, "godownContactMobile") || undefined,
         referenceName1: getFieldValue(formData, "referenceName1") || undefined,
-        referencePhone1: getFieldValue(formData, "referencePhone1") || undefined,
-        referenceDetails1: getFieldValue(formData, "referenceDetails1") || undefined,
+        referencePhone1:
+          getFieldValue(formData, "referencePhone1") || undefined,
+        referenceDetails1:
+          getFieldValue(formData, "referenceDetails1") || undefined,
         referenceName2: getFieldValue(formData, "referenceName2") || undefined,
-        referencePhone2: getFieldValue(formData, "referencePhone2") || undefined,
-        referenceDetails2: getFieldValue(formData, "referenceDetails2") || undefined,
+        referencePhone2:
+          getFieldValue(formData, "referencePhone2") || undefined,
+        referenceDetails2:
+          getFieldValue(formData, "referenceDetails2") || undefined,
       };
 
       const submitFormData = new FormData();
@@ -502,7 +552,10 @@ function SkDealer() {
       if (masonIdProofFile instanceof File && masonIdProofFile.size > 0) {
         submitFormData.append("idProof", masonIdProofFile);
       }
-      if (masonAddressProofBackFile instanceof File && masonAddressProofBackFile.size > 0) {
+      if (
+        masonAddressProofBackFile instanceof File &&
+        masonAddressProofBackFile.size > 0
+      ) {
         submitFormData.append("idProofBack", masonAddressProofBackFile);
       }
       if (masonPanCopyFile instanceof File && masonPanCopyFile.size > 0) {
@@ -513,6 +566,9 @@ function SkDealer() {
         `${SK_BACKEND_URL}/form-submissions`,
         {
           method: "POST",
+          headers: {
+            "Idempotency-Key": idempotencyKey,
+          },
           body: submitFormData,
         },
       );
@@ -542,6 +598,8 @@ function SkDealer() {
             : "Unable to submit registration. Please try again.",
         isSuccess: false,
       });
+    } finally {
+      submitInFlightRef.current = false;
     }
   };
 
@@ -556,6 +614,13 @@ function SkDealer() {
     field: "phoneNumber" | "token",
     value: string,
   ) => {
+    if (field === "phoneNumber") {
+      setPhoneAvailability({
+        checking: false,
+        exists: false,
+        status: "",
+      });
+    }
     updateOtpState({
       [field]: value,
       isValidated: false,
@@ -724,6 +789,7 @@ function SkDealer() {
       return;
     }
 
+    setCameraFacingMode("environment");
     setCameraModal({
       isOpen: true,
       uploadKey: key,
@@ -748,21 +814,54 @@ function SkDealer() {
     });
   };
 
-  const captureCameraImage = () => {
-    if (!cameraModal.uploadKey || !cameraVideoRef.current) {
+  const toggleCameraFacingMode = () => {
+    setCameraFacingMode((previous) =>
+      previous === "environment" ? "user" : "environment",
+    );
+  };
+
+  const captureCameraImage = async () => {
+    if (!cameraModal.uploadKey) {
       return;
     }
 
-    const sourceVideo = cameraVideoRef.current;
-    const targetCanvas = document.createElement("canvas");
-    const width = sourceVideo.videoWidth || 720;
-    const height = sourceVideo.videoHeight || 540;
+    let blob: Blob | null = null;
 
-    targetCanvas.width = width;
-    targetCanvas.height = height;
+    const videoTrack = cameraStreamRef.current?.getVideoTracks()[0];
+    if (videoTrack && "ImageCapture" in window) {
+      try {
+        const IC = (window as unknown as Record<string, unknown>).ImageCapture as new (
+          track: MediaStreamTrack,
+        ) => { takePhoto: () => Promise<Blob> };
+        const ic = new IC(videoTrack);
+        blob = await ic.takePhoto();
+      } catch {
+        blob = null;
+      }
+    }
 
-    const drawingContext = targetCanvas.getContext("2d");
-    if (!drawingContext) {
+    if (!blob && cameraVideoRef.current) {
+      const sourceVideo = cameraVideoRef.current;
+      const targetCanvas = document.createElement("canvas");
+      const width = sourceVideo.videoWidth || 720;
+      const height = sourceVideo.videoHeight || 540;
+      targetCanvas.width = width;
+      targetCanvas.height = height;
+      const drawingContext = targetCanvas.getContext("2d");
+      if (!drawingContext) {
+        setCameraModal((previous) => ({
+          ...previous,
+          error: "Unable to capture image. Please try again.",
+        }));
+        return;
+      }
+      drawingContext.drawImage(sourceVideo, 0, 0, width, height);
+      blob = await new Promise<Blob | null>((resolve) =>
+        targetCanvas.toBlob(resolve, "image/jpeg", 0.92),
+      );
+    }
+
+    if (!blob || !cameraModal.uploadKey) {
       setCameraModal((previous) => ({
         ...previous,
         error: "Unable to capture image. Please try again.",
@@ -770,38 +869,22 @@ function SkDealer() {
       return;
     }
 
-    drawingContext.drawImage(sourceVideo, 0, 0, width, height);
-    targetCanvas.toBlob(
-      (blob) => {
-        if (!blob || !cameraModal.uploadKey) {
-          setCameraModal((previous) => ({
-            ...previous,
-            error: "Unable to capture image. Please try again.",
-          }));
-          return;
-        }
+    const capturedFile = new File([blob], `capture-${Date.now()}.jpg`, {
+      type: "image/jpeg",
+    });
+    const capturedPreviewUrl = URL.createObjectURL(capturedFile);
 
-        const capturedFile = new File([blob], `capture-${Date.now()}.jpg`, {
-          type: "image/jpeg",
-        });
-        const capturedPreviewUrl = URL.createObjectURL(capturedFile);
-
-        setCameraModal((previous) => {
-          if (previous.capturedPreviewUrl) {
-            URL.revokeObjectURL(previous.capturedPreviewUrl);
-          }
-
-          return {
-            ...previous,
-            capturedFile,
-            capturedPreviewUrl,
-            error: "",
-          };
-        });
-      },
-      "image/jpeg",
-      0.92,
-    );
+    setCameraModal((previous) => {
+      if (previous.capturedPreviewUrl) {
+        URL.revokeObjectURL(previous.capturedPreviewUrl);
+      }
+      return {
+        ...previous,
+        capturedFile,
+        capturedPreviewUrl,
+        error: "",
+      };
+    });
   };
 
   const clearCapturedCameraImage = () => {
@@ -837,6 +920,58 @@ function SkDealer() {
   };
 
   useEffect(() => {
+    const normalizedPhone = normalizePhone(otpState.phoneNumber);
+    if (phoneCheckTimerRef.current) {
+      window.clearTimeout(phoneCheckTimerRef.current);
+      phoneCheckTimerRef.current = null;
+    }
+    if (normalizedPhone.length !== 10) {
+      setPhoneAvailability({
+        checking: false,
+        exists: false,
+        status: "",
+      });
+      return;
+    }
+
+    setPhoneAvailability({
+      checking: true,
+      exists: false,
+      status: "Checking phone number...",
+    });
+    phoneCheckTimerRef.current = window.setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `${SK_BACKEND_URL}/form-submissions/phone-status?phone=${encodeURIComponent(normalizedPhone)}`,
+        );
+        const responseBody = (await response.json().catch(() => null)) as unknown;
+        const exists =
+          isRecord(responseBody) && typeof responseBody.exists === "boolean"
+            ? responseBody.exists
+            : false;
+        setPhoneAvailability({
+          checking: false,
+          exists,
+          status: exists ? "Phone number is already registered." : "",
+        });
+      } catch {
+        setPhoneAvailability({
+          checking: false,
+          exists: false,
+          status: "Unable to verify phone number right now.",
+        });
+      }
+    }, 350);
+
+    return () => {
+      if (phoneCheckTimerRef.current) {
+        window.clearTimeout(phoneCheckTimerRef.current);
+        phoneCheckTimerRef.current = null;
+      }
+    };
+  }, [otpState.phoneNumber]);
+
+  useEffect(() => {
     if (!cameraModal.isOpen) {
       return;
     }
@@ -853,14 +988,39 @@ function SkDealer() {
       }
 
       try {
+        const videoConstraints: MediaTrackConstraints & Record<string, unknown> = {
+          facingMode: { ideal: cameraFacingMode },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        };
+        if (cameraFacingMode === "environment") {
+          (videoConstraints as Record<string, unknown>).advanced = [
+            { focusMode: "continuous" },
+          ];
+        }
+
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user" },
+          video: videoConstraints,
           audio: false,
         });
 
         if (isDisposed) {
           stream.getTracks().forEach((track) => track.stop());
           return;
+        }
+
+        const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack && cameraFacingMode === "environment") {
+          const caps = (videoTrack as unknown as { getCapabilities?: () => Record<string, unknown> })
+            .getCapabilities?.();
+          const supportedModes = caps?.focusMode;
+          if (Array.isArray(supportedModes) && supportedModes.includes("continuous")) {
+            await videoTrack
+              .applyConstraints({
+                advanced: [{ focusMode: "continuous" }],
+              } as unknown as MediaTrackConstraints)
+              .catch(() => undefined);
+          }
         }
 
         cameraStreamRef.current = stream;
@@ -887,7 +1047,7 @@ function SkDealer() {
       isDisposed = true;
       stopCameraStream();
     };
-  }, [cameraModal.isOpen]);
+  }, [cameraModal.isOpen, cameraFacingMode]);
 
   useEffect(() => {
     if (!cameraModal.isOpen || cameraModal.capturedPreviewUrl) {
@@ -899,8 +1059,10 @@ function SkDealer() {
       return;
     }
 
-    cameraVideoRef.current.srcObject = currentStream;
-    cameraVideoRef.current.play().catch(() => undefined);
+    // Avoid replaying immediately after initial open; only rebind stream when needed.
+    if (cameraVideoRef.current.srcObject !== currentStream) {
+      cameraVideoRef.current.srcObject = currentStream;
+    }
   }, [cameraModal.isOpen, cameraModal.capturedPreviewUrl]);
 
   useEffect(() => {
@@ -940,13 +1102,24 @@ function SkDealer() {
                 Place your face/document in frame and capture clearly.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={closeCameraModal}
-              style={cameraCloseButtonStyle}
-            >
-              ×
-            </button>
+            <div style={cameraHeaderActionsStyle}>
+              <button
+                type="button"
+                onClick={toggleCameraFacingMode}
+                style={cameraSwitchButtonStyle}
+              >
+                {cameraFacingMode === "environment"
+                  ? "Switch to Front"
+                  : "Switch to Back"}
+              </button>
+              <button
+                type="button"
+                onClick={closeCameraModal}
+                style={cameraCloseButtonStyle}
+              >
+                ×
+              </button>
+            </div>
           </div>
           <div style={cameraViewportStyle}>
             {cameraModal.capturedPreviewUrl ? (
@@ -1123,65 +1296,33 @@ function SkDealer() {
               />
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                alignItems: isMobile ? "stretch" : "center",
-                justifyContent: "flex-end",
-                gap: 12,
-                flexDirection: isMobile ? "column" : "row",
-                marginBottom: 12,
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 13,
-                  fontWeight: 700,
-                  textAlign: isMobile ? "left" : "right",
-                }}
-              >
-                OTP for SK Customer verification
-              </span>
+            {canShowOtpControls && (
               <div
                 style={{
                   display: "flex",
                   alignItems: isMobile ? "stretch" : "center",
-                  justifyContent: "flex-start",
+                  justifyContent: "flex-end",
                   gap: 12,
                   flexDirection: isMobile ? "column" : "row",
+                  marginBottom: 12,
                 }}
               >
-                <button
-                  type="button"
+                <span
                   style={{
-                    ...smallRedButtonStyle,
-                    width: isMobile ? "100%" : "auto",
-                    minHeight: 40,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    textAlign: isMobile ? "left" : "right",
                   }}
-                  onClick={handleSendOtp}
-                  disabled={otpState.checking}
                 >
-                  {otpState.checking ? "Sending..." : "Send OTP"}
-                </button>
-              </div>
-            </div>
-
-            <div style={responsiveGridTwo}>
-              <div style={responsiveOtpGrid}>
-                <input
-                  name="validationCode"
-                  placeholder="Enter Validation Code*"
-                  style={fieldStyle}
-                  required
-                  value={otpState.token}
-                  onChange={(event) =>
-                    handleOtpValueChange("token", event.target.value)
-                  }
-                />
+                  OTP for SK Customer verification
+                </span>
                 <div
                   style={{
                     display: "flex",
+                    alignItems: isMobile ? "stretch" : "center",
                     justifyContent: "flex-start",
+                    gap: 12,
+                    flexDirection: isMobile ? "column" : "row",
                   }}
                 >
                   <button
@@ -1191,13 +1332,51 @@ function SkDealer() {
                       width: isMobile ? "100%" : "auto",
                       minHeight: 40,
                     }}
-                    onClick={handleValidateOtp}
-                    disabled={otpState.validating}
+                    onClick={handleSendOtp}
+                    disabled={otpState.checking}
                   >
-                    {otpState.validating ? "Validating..." : "Validate OTP"}
+                    {otpState.checking ? "Sending..." : "Send OTP"}
                   </button>
                 </div>
               </div>
+            )}
+
+            <div style={responsiveGridTwo}>
+              {canShowOtpControls ? (
+                <div style={responsiveOtpGrid}>
+                  <input
+                    name="validationCode"
+                    placeholder="Enter Validation Code*"
+                    style={fieldStyle}
+                    required
+                    value={otpState.token}
+                    onChange={(event) =>
+                      handleOtpValueChange("token", event.target.value)
+                    }
+                  />
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "flex-start",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      style={{
+                        ...smallRedButtonStyle,
+                        width: isMobile ? "100%" : "auto",
+                        minHeight: 40,
+                      }}
+                      onClick={handleValidateOtp}
+                      disabled={otpState.validating}
+                    >
+                      {otpState.validating ? "Validating..." : "Validate OTP"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div />
+              )}
               <input
                 name="emailId"
                 placeholder="Email"
@@ -1205,7 +1384,7 @@ function SkDealer() {
                 required
               />
             </div>
-            {otpState.status && (
+            {canShowOtpControls && otpState.status && (
               <p
                 style={{
                   ...otpStatusStyle,
@@ -1213,6 +1392,20 @@ function SkDealer() {
                 }}
               >
                 {otpState.status}
+              </p>
+            )}
+            {phoneAvailability.status && (
+              <p
+                style={{
+                  ...otpStatusStyle,
+                  color: phoneAvailability.checking
+                    ? "#175cd3"
+                    : phoneAvailability.exists
+                      ? "#b42318"
+                      : "#0f8a3c",
+                }}
+              >
+                {phoneAvailability.status}
               </p>
             )}
 
@@ -1723,7 +1916,7 @@ function SkDealer() {
                 upload={uploadByKey.masonPhoto}
                 captureMode
                 required
-                onTrigger={() => openCameraModal("masonPhoto")}
+                onTrigger={() => triggerUpload("masonPhoto")}
                 onClear={() => clearUpload("masonPhoto")}
                 onFileChange={(event) =>
                   handleUploadChange("masonPhoto", event)
@@ -1819,14 +2012,18 @@ function SkDealer() {
                   }}
                   onClick={() => setDeclarationChoice("disagree")}
                 >
-                  I don't Agree
+                  I don&apos;t Agree
                 </button>
               </div>
 
               {declarationChoice === "agree" && (
                 <button
                   type="submit"
-                  disabled={submitState.submitting}
+                  disabled={
+                    submitState.submitting ||
+                    phoneAvailability.checking ||
+                    phoneAvailability.exists
+                  }
                   style={submitButtonStyle}
                 >
                   {submitState.submitting ? "Submitting..." : "Submit"}
@@ -2771,6 +2968,23 @@ const cameraCloseButtonStyle = {
   fontSize: 26,
   lineHeight: 1,
   color: "#475467",
+  cursor: "pointer",
+};
+
+const cameraHeaderActionsStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+};
+
+const cameraSwitchButtonStyle = {
+  border: "1px solid #d0d5dd",
+  backgroundColor: "#f8fafc",
+  color: "#344054",
+  borderRadius: 10,
+  padding: "8px 12px",
+  fontSize: 12,
+  fontWeight: 700,
   cursor: "pointer",
 };
 

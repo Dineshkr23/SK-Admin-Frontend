@@ -44,7 +44,7 @@ type OfficePincodeLookupState = {
   isSuccess: boolean;
 };
 
-const SK_BACKEND_URL = "https://sk-backend.emovur.com";
+const SK_BACKEND_URL = "https://backend.sksupertmt.com";
 
 const createOtpState = (): OtpVerificationState => ({
   phoneNumber: "",
@@ -105,6 +105,18 @@ function Arch_Engi() {
   const isTablet = viewportWidth >= 768 && viewportWidth < 1100;
   const [dateOfBirth, setDateOfBirth] = useState("");
   const todayDate = new Date().toISOString().split("T")[0];
+  const submitInFlightRef = useRef(false);
+  const phoneCheckTimerRef = useRef<number | null>(null);
+  const [cameraFacingMode, setCameraFacingMode] = useState<"environment" | "user">(
+    "environment",
+  );
+  const [isSameAsAbove, setIsSameAsAbove] = useState(false);
+  const [whatsAppNumber, setWhatsAppNumber] = useState("");
+  const [phoneAvailability, setPhoneAvailability] = useState({
+    checking: false,
+    exists: false,
+    status: "",
+  });
 
   const responsiveGridTwo = {
     ...gridTwo,
@@ -138,12 +150,18 @@ function Arch_Engi() {
 
   const submitButtonStyle = {
     border: "none",
-    backgroundColor: "#d11b1b",
+    backgroundColor:
+      submitState.submitting || phoneAvailability.checking || phoneAvailability.exists
+        ? "#98a2b3"
+        : "#d11b1b",
     color: "#ffffff",
     padding: isMobile ? "12px 20px" : "10px 34px",
     fontWeight: 700,
     borderRadius: 10,
-    cursor: "pointer",
+    cursor:
+      submitState.submitting || phoneAvailability.checking || phoneAvailability.exists
+        ? "not-allowed"
+        : "pointer",
     opacity: submitState.submitting ? 0.8 : 1,
     width: isMobile ? "100%" : "auto",
     minWidth: isMobile ? "100%" : 140,
@@ -161,6 +179,11 @@ function Arch_Engi() {
   const isValidIndianPhone = (value: string): boolean => /^\d{10}$/.test(value);
   const isValidIndianPincode = (value: string): boolean =>
     /^\d{6}$/.test(value);
+  const normalizePhone = (value: string): string => value.replace(/\D/g, "").slice(-10);
+  const canShowOtpControls =
+    normalizePhone(otpState.phoneNumber).length === 10 &&
+    !phoneAvailability.checking &&
+    !phoneAvailability.exists;
 
   const getFormInputElement = (name: string): HTMLInputElement | null => {
     if (!formRef.current) {
@@ -367,6 +390,10 @@ function Arch_Engi() {
       return "Please validate OTP before submitting the form.";
     }
 
+    if (phoneAvailability.exists) {
+      return "Phone number is already registered.";
+    }
+
     if (declarationChoice !== "agree") {
       return "Please agree to the declaration before submitting.";
     }
@@ -387,6 +414,10 @@ function Arch_Engi() {
 
   const handleMasonSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submitInFlightRef.current) {
+      return;
+    }
+    submitInFlightRef.current = true;
 
     const formData = new FormData(event.currentTarget);
     setFormValidationError("");
@@ -409,6 +440,7 @@ function Arch_Engi() {
     });
 
     try {
+      const idempotencyKey = `fs-${Date.now()}-${crypto.randomUUID()}`;
       const backendPayload = {
         formType: "architectEngineer" as const,
         pi_firstName: getFieldValue(formData, "firstName"),
@@ -465,6 +497,9 @@ function Arch_Engi() {
         `${SK_BACKEND_URL}/form-submissions`,
         {
           method: "POST",
+          headers: {
+            "Idempotency-Key": idempotencyKey,
+          },
           body: submitFormData,
         },
       );
@@ -494,6 +529,8 @@ function Arch_Engi() {
             : "Unable to submit registration. Please try again.",
         isSuccess: false,
       });
+    } finally {
+      submitInFlightRef.current = false;
     }
   };
 
@@ -508,6 +545,16 @@ function Arch_Engi() {
     field: "phoneNumber" | "token",
     value: string,
   ) => {
+    if (field === "phoneNumber") {
+      if (isSameAsAbove) {
+        setWhatsAppNumber(value);
+      }
+      setPhoneAvailability({
+        checking: false,
+        exists: false,
+        status: "",
+      });
+    }
     updateOtpState({
       [field]: value,
       isValidated: false,
@@ -676,6 +723,7 @@ function Arch_Engi() {
       return;
     }
 
+    setCameraFacingMode("environment");
     setCameraModal({
       isOpen: true,
       uploadKey: key,
@@ -700,21 +748,54 @@ function Arch_Engi() {
     });
   };
 
-  const captureCameraImage = () => {
-    if (!cameraModal.uploadKey || !cameraVideoRef.current) {
+  const toggleCameraFacingMode = () => {
+    setCameraFacingMode((previous) =>
+      previous === "environment" ? "user" : "environment",
+    );
+  };
+
+  const captureCameraImage = async () => {
+    if (!cameraModal.uploadKey) {
       return;
     }
 
-    const sourceVideo = cameraVideoRef.current;
-    const targetCanvas = document.createElement("canvas");
-    const width = sourceVideo.videoWidth || 720;
-    const height = sourceVideo.videoHeight || 540;
+    let blob: Blob | null = null;
 
-    targetCanvas.width = width;
-    targetCanvas.height = height;
+    const videoTrack = cameraStreamRef.current?.getVideoTracks()[0];
+    if (videoTrack && "ImageCapture" in window) {
+      try {
+        const IC = (window as unknown as Record<string, unknown>).ImageCapture as new (
+          track: MediaStreamTrack,
+        ) => { takePhoto: () => Promise<Blob> };
+        const ic = new IC(videoTrack);
+        blob = await ic.takePhoto();
+      } catch {
+        blob = null;
+      }
+    }
 
-    const drawingContext = targetCanvas.getContext("2d");
-    if (!drawingContext) {
+    if (!blob && cameraVideoRef.current) {
+      const sourceVideo = cameraVideoRef.current;
+      const targetCanvas = document.createElement("canvas");
+      const width = sourceVideo.videoWidth || 720;
+      const height = sourceVideo.videoHeight || 540;
+      targetCanvas.width = width;
+      targetCanvas.height = height;
+      const drawingContext = targetCanvas.getContext("2d");
+      if (!drawingContext) {
+        setCameraModal((previous) => ({
+          ...previous,
+          error: "Unable to capture image. Please try again.",
+        }));
+        return;
+      }
+      drawingContext.drawImage(sourceVideo, 0, 0, width, height);
+      blob = await new Promise<Blob | null>((resolve) =>
+        targetCanvas.toBlob(resolve, "image/jpeg", 0.92),
+      );
+    }
+
+    if (!blob || !cameraModal.uploadKey) {
       setCameraModal((previous) => ({
         ...previous,
         error: "Unable to capture image. Please try again.",
@@ -722,38 +803,22 @@ function Arch_Engi() {
       return;
     }
 
-    drawingContext.drawImage(sourceVideo, 0, 0, width, height);
-    targetCanvas.toBlob(
-      (blob) => {
-        if (!blob || !cameraModal.uploadKey) {
-          setCameraModal((previous) => ({
-            ...previous,
-            error: "Unable to capture image. Please try again.",
-          }));
-          return;
-        }
+    const capturedFile = new File([blob], `capture-${Date.now()}.jpg`, {
+      type: "image/jpeg",
+    });
+    const capturedPreviewUrl = URL.createObjectURL(capturedFile);
 
-        const capturedFile = new File([blob], `capture-${Date.now()}.jpg`, {
-          type: "image/jpeg",
-        });
-        const capturedPreviewUrl = URL.createObjectURL(capturedFile);
-
-        setCameraModal((previous) => {
-          if (previous.capturedPreviewUrl) {
-            URL.revokeObjectURL(previous.capturedPreviewUrl);
-          }
-
-          return {
-            ...previous,
-            capturedFile,
-            capturedPreviewUrl,
-            error: "",
-          };
-        });
-      },
-      "image/jpeg",
-      0.92,
-    );
+    setCameraModal((previous) => {
+      if (previous.capturedPreviewUrl) {
+        URL.revokeObjectURL(previous.capturedPreviewUrl);
+      }
+      return {
+        ...previous,
+        capturedFile,
+        capturedPreviewUrl,
+        error: "",
+      };
+    });
   };
 
   const clearCapturedCameraImage = () => {
@@ -789,6 +854,65 @@ function Arch_Engi() {
   };
 
   useEffect(() => {
+    const normalizedPhone = normalizePhone(otpState.phoneNumber);
+    if (phoneCheckTimerRef.current) {
+      window.clearTimeout(phoneCheckTimerRef.current);
+      phoneCheckTimerRef.current = null;
+    }
+    if (normalizedPhone.length !== 10) {
+      setPhoneAvailability({
+        checking: false,
+        exists: false,
+        status: "",
+      });
+      return;
+    }
+
+    setPhoneAvailability({
+      checking: true,
+      exists: false,
+      status: "Checking phone number...",
+    });
+    phoneCheckTimerRef.current = window.setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `${SK_BACKEND_URL}/form-submissions/phone-status?phone=${encodeURIComponent(normalizedPhone)}`,
+        );
+        const responseBody = (await response.json().catch(() => null)) as unknown;
+        const exists =
+          isRecord(responseBody) && typeof responseBody.exists === "boolean"
+            ? responseBody.exists
+            : false;
+        setPhoneAvailability({
+          checking: false,
+          exists,
+          status: exists ? "Phone number is already registered." : "",
+        });
+      } catch {
+        setPhoneAvailability({
+          checking: false,
+          exists: false,
+          status: "Unable to verify phone number right now.",
+        });
+      }
+    }, 350);
+
+    return () => {
+      if (phoneCheckTimerRef.current) {
+        window.clearTimeout(phoneCheckTimerRef.current);
+        phoneCheckTimerRef.current = null;
+      }
+    };
+  }, [otpState.phoneNumber]);
+
+  const handleSameAsAboveChange = (checked: boolean) => {
+    setIsSameAsAbove(checked);
+    if (checked) {
+      setWhatsAppNumber(otpState.phoneNumber);
+    }
+  };
+
+  useEffect(() => {
     if (!cameraModal.isOpen) {
       return;
     }
@@ -805,14 +929,39 @@ function Arch_Engi() {
       }
 
       try {
+        const videoConstraints: MediaTrackConstraints & Record<string, unknown> = {
+          facingMode: { ideal: cameraFacingMode },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        };
+        if (cameraFacingMode === "environment") {
+          (videoConstraints as Record<string, unknown>).advanced = [
+            { focusMode: "continuous" },
+          ];
+        }
+
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user" },
+          video: videoConstraints,
           audio: false,
         });
 
         if (isDisposed) {
           stream.getTracks().forEach((track) => track.stop());
           return;
+        }
+
+        const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack && cameraFacingMode === "environment") {
+          const caps = (videoTrack as unknown as { getCapabilities?: () => Record<string, unknown> })
+            .getCapabilities?.();
+          const supportedModes = caps?.focusMode;
+          if (Array.isArray(supportedModes) && supportedModes.includes("continuous")) {
+            await videoTrack
+              .applyConstraints({
+                advanced: [{ focusMode: "continuous" }],
+              } as unknown as MediaTrackConstraints)
+              .catch(() => undefined);
+          }
         }
 
         cameraStreamRef.current = stream;
@@ -839,7 +988,7 @@ function Arch_Engi() {
       isDisposed = true;
       stopCameraStream();
     };
-  }, [cameraModal.isOpen]);
+  }, [cameraModal.isOpen, cameraFacingMode]);
 
   useEffect(() => {
     if (!cameraModal.isOpen || cameraModal.capturedPreviewUrl) {
@@ -851,8 +1000,10 @@ function Arch_Engi() {
       return;
     }
 
-    cameraVideoRef.current.srcObject = currentStream;
-    cameraVideoRef.current.play().catch(() => undefined);
+    // Avoid replaying immediately after initial open; only rebind stream when needed.
+    if (cameraVideoRef.current.srcObject !== currentStream) {
+      cameraVideoRef.current.srcObject = currentStream;
+    }
   }, [cameraModal.isOpen, cameraModal.capturedPreviewUrl]);
 
   useEffect(() => {
@@ -892,13 +1043,24 @@ function Arch_Engi() {
                 Place your face/document in frame and capture clearly.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={closeCameraModal}
-              style={cameraCloseButtonStyle}
-            >
-              ×
-            </button>
+            <div style={cameraHeaderActionsStyle}>
+              <button
+                type="button"
+                onClick={toggleCameraFacingMode}
+                style={cameraSwitchButtonStyle}
+              >
+                {cameraFacingMode === "environment"
+                  ? "Switch to Front"
+                  : "Switch to Back"}
+              </button>
+              <button
+                type="button"
+                onClick={closeCameraModal}
+                style={cameraCloseButtonStyle}
+              >
+                ×
+              </button>
+            </div>
           </div>
           <div style={cameraViewportStyle}>
             {cameraModal.capturedPreviewUrl ? (
@@ -1043,65 +1205,33 @@ function Arch_Engi() {
               />
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                alignItems: isMobile ? "stretch" : "center",
-                justifyContent: "flex-end",
-                gap: 12,
-                flexDirection: isMobile ? "column" : "row",
-                marginBottom: 12,
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 13,
-                  fontWeight: 700,
-                  textAlign: isMobile ? "left" : "right",
-                }}
-              >
-                OTP for SK Customer verification
-              </span>
+            {canShowOtpControls && (
               <div
                 style={{
                   display: "flex",
                   alignItems: isMobile ? "stretch" : "center",
-                  justifyContent: "flex-start",
+                  justifyContent: "flex-end",
                   gap: 12,
                   flexDirection: isMobile ? "column" : "row",
+                  marginBottom: 12,
                 }}
               >
-                <button
-                  type="button"
+                <span
                   style={{
-                    ...smallRedButtonStyle,
-                    width: isMobile ? "100%" : "auto",
-                    minHeight: 40,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    textAlign: isMobile ? "left" : "right",
                   }}
-                  onClick={handleSendOtp}
-                  disabled={otpState.checking}
                 >
-                  {otpState.checking ? "Sending..." : "Send OTP"}
-                </button>
-              </div>
-            </div>
-
-            <div style={responsiveGridTwo}>
-              <div style={responsiveOtpGrid}>
-                <input
-                  name="validationCode"
-                  placeholder="Enter Validation Code*"
-                  style={fieldStyle}
-                  required
-                  value={otpState.token}
-                  onChange={(event) =>
-                    handleOtpValueChange("token", event.target.value)
-                  }
-                />
+                  OTP for SK Customer verification
+                </span>
                 <div
                   style={{
                     display: "flex",
+                    alignItems: isMobile ? "stretch" : "center",
                     justifyContent: "flex-start",
+                    gap: 12,
+                    flexDirection: isMobile ? "column" : "row",
                   }}
                 >
                   <button
@@ -1111,20 +1241,60 @@ function Arch_Engi() {
                       width: isMobile ? "100%" : "auto",
                       minHeight: 40,
                     }}
-                    onClick={handleValidateOtp}
-                    disabled={otpState.validating}
+                    onClick={handleSendOtp}
+                    disabled={otpState.checking}
                   >
-                    {otpState.validating ? "Validating..." : "Validate OTP"}
+                    {otpState.checking ? "Sending..." : "Send OTP"}
                   </button>
                 </div>
               </div>
+            )}
+
+            <div style={responsiveGridTwo}>
+              {canShowOtpControls ? (
+                <div style={responsiveOtpGrid}>
+                  <input
+                    name="validationCode"
+                    placeholder="Enter Validation Code*"
+                    style={fieldStyle}
+                    required
+                    value={otpState.token}
+                    onChange={(event) =>
+                      handleOtpValueChange("token", event.target.value)
+                    }
+                  />
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "flex-start",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      style={{
+                        ...smallRedButtonStyle,
+                        width: isMobile ? "100%" : "auto",
+                        minHeight: 40,
+                      }}
+                      onClick={handleValidateOtp}
+                      disabled={otpState.validating}
+                    >
+                      {otpState.validating ? "Validating..." : "Validate OTP"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div />
+              )}
               <input
                 name="whatsappNumber"
                 placeholder="WhatsApp Number"
                 style={fieldStyle}
+                value={whatsAppNumber}
+                onChange={(event) => setWhatsAppNumber(event.target.value)}
               />
             </div>
-            {otpState.status && (
+            {canShowOtpControls && otpState.status && (
               <p
                 style={{
                   ...otpStatusStyle,
@@ -1134,9 +1304,28 @@ function Arch_Engi() {
                 {otpState.status}
               </p>
             )}
+            {phoneAvailability.status && (
+              <p
+                style={{
+                  ...otpStatusStyle,
+                  color: phoneAvailability.checking
+                    ? "#175cd3"
+                    : phoneAvailability.exists
+                      ? "#b42318"
+                      : "#0f8a3c",
+                }}
+              >
+                {phoneAvailability.status}
+              </p>
+            )}
 
             <label style={checkboxLineStyle}>
-              <input type="checkbox" name="sameAsAbove" />
+              <input
+                type="checkbox"
+                name="sameAsAbove"
+                checked={isSameAsAbove}
+                onChange={(event) => handleSameAsAboveChange(event.target.checked)}
+              />
               <span>Same as above</span>
             </label>
 
@@ -1314,7 +1503,7 @@ function Arch_Engi() {
                 upload={uploadByKey.masonPhoto}
                 captureMode
                 required
-                onTrigger={() => openCameraModal("masonPhoto")}
+                onTrigger={() => triggerUpload("masonPhoto")}
                 onClear={() => clearUpload("masonPhoto")}
                 onFileChange={(event) =>
                   handleUploadChange("masonPhoto", event)
@@ -1411,14 +1600,18 @@ function Arch_Engi() {
                   }}
                   onClick={() => setDeclarationChoice("disagree")}
                 >
-                  I don't Agree
+                  I don&apos;t Agree
                 </button>
               </div>
 
               {declarationChoice === "agree" && (
                 <button
                   type="submit"
-                  disabled={submitState.submitting}
+                  disabled={
+                    submitState.submitting ||
+                    phoneAvailability.checking ||
+                    phoneAvailability.exists
+                  }
                   style={submitButtonStyle}
                 >
                   {submitState.submitting ? "Submitting..." : "Submit"}
@@ -2370,6 +2563,23 @@ const cameraCloseButtonStyle = {
   fontSize: 26,
   lineHeight: 1,
   color: "#475467",
+  cursor: "pointer",
+};
+
+const cameraHeaderActionsStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+};
+
+const cameraSwitchButtonStyle = {
+  border: "1px solid #d0d5dd",
+  backgroundColor: "#f8fafc",
+  color: "#344054",
+  borderRadius: 10,
+  padding: "8px 12px",
+  fontSize: 12,
+  fontWeight: 700,
   cursor: "pointer",
 };
 

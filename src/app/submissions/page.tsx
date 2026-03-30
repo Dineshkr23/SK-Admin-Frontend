@@ -8,6 +8,7 @@ import {
   type MouseEvent,
 } from "react";
 import {
+  Alert,
   Autocomplete,
   Box,
   Button,
@@ -18,6 +19,7 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  Snackbar,
   TextField,
   Typography,
   Stack,
@@ -453,7 +455,11 @@ export default function SubmissionsPage() {
   const [clearedIdProofBack, setClearedIdProofBack] = useState(false);
   const [clearedPanProof, setClearedPanProof] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: "success" | "error";
+  }>({ open: false, message: "", severity: "success" });
   const [pendingEnteredBy, setPendingEnteredBy] = useState<
     Record<string, string>
   >({});
@@ -778,7 +784,6 @@ export default function SubmissionsPage() {
       setClearedIdProof(false);
       setClearedIdProofBack(false);
       setClearedPanProof(false);
-      setSaveError(null);
       didAutoScrollPassportRef.current = false;
       return;
     }
@@ -839,7 +844,6 @@ export default function SubmissionsPage() {
   const handleSave = async () => {
     if (!detailId) return;
     setSaveLoading(true);
-    setSaveError(null);
     try {
       const payload = {
         ...buildUpdatePayload(form),
@@ -864,8 +868,15 @@ export default function SubmissionsPage() {
       setClearedIdProof(false);
       setClearedIdProofBack(false);
       setClearedPanProof(false);
+      setSnackbar({
+        open: true,
+        message: "Changes saved.",
+        severity: "success",
+      });
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Save failed");
+      const msg =
+        err instanceof Error ? err.message : "Could not save. Try again.";
+      setSnackbar({ open: true, message: msg, severity: "error" });
     } finally {
       setSaveLoading(false);
     }
@@ -1737,12 +1748,6 @@ export default function SubmissionsPage() {
               const formType = getDialogFormType(form);
               return (
                 <Box component="form" sx={{ pb: 3 }}>
-                  {saveError && (
-                    <Typography color="error" sx={{ mb: 2, fontSize: 14 }}>
-                      {saveError}
-                    </Typography>
-                  )}
-
                   {formType === "masonBarBender" && (
                     <>
                       <DialogSectionHeader title="Personal information" />
@@ -5545,6 +5550,58 @@ export default function SubmissionsPage() {
           />
         </DialogContent>
       </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={(_, reason) => {
+          if (reason === "clickaway") return;
+          setSnackbar((s) => ({ ...s, open: false }));
+        }}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        sx={{
+          top: { xs: 16, sm: 32 },
+          right: { xs: 16, sm: 32 },
+          "& .MuiSnackbarContent-root": {
+            padding: 0,
+            background: "transparent",
+            boxShadow: "none",
+          },
+        }}
+      >
+        <Alert
+          onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+          severity={snackbar.severity}
+          variant="outlined"
+          sx={{
+            minWidth: { xs: 260, sm: 300 },
+            maxWidth: 380,
+            py: 0.75,
+            px: 1.5,
+            fontSize: 13,
+            fontWeight: 500,
+            letterSpacing: "0.01em",
+            borderRadius: "10px",
+            boxShadow: "0 8px 28px rgba(15, 23, 42, 0.08)",
+            borderWidth: 1,
+            alignItems: "center",
+            "& .MuiAlert-icon": { fontSize: 20, opacity: 0.92 },
+            ...(snackbar.severity === "success"
+              ? {
+                  color: "#0f5132",
+                  bgcolor: "rgba(25, 135, 84, 0.06)",
+                  borderColor: "rgba(25, 135, 84, 0.28)",
+                }
+              : {
+                  color: "#842029",
+                  bgcolor: "rgba(220, 53, 69, 0.06)",
+                  borderColor: "rgba(220, 53, 69, 0.28)",
+                }),
+          }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
