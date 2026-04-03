@@ -24,8 +24,6 @@ type CameraModalState = {
 type OtpVerificationState = {
   phoneNumber: string;
   token: string;
-  txId: string;
-  timeStamp: number | null;
   checking: boolean;
   validating: boolean;
   isValidated: boolean;
@@ -49,8 +47,6 @@ const SK_BACKEND_URL = "https://backend.sksupertmt.com";
 const createOtpState = (): OtpVerificationState => ({
   phoneNumber: "",
   token: "",
-  txId: "",
-  timeStamp: null,
   checking: false,
   validating: false,
   isValidated: false,
@@ -151,7 +147,10 @@ function Arch_Engi() {
   const submitButtonStyle = {
     border: "none",
     backgroundColor:
-      submitState.submitting || phoneAvailability.checking || phoneAvailability.exists
+      submitState.submitting ||
+      phoneAvailability.checking ||
+      phoneAvailability.exists ||
+      !otpState.isValidated
         ? "#98a2b3"
         : "#d11b1b",
     color: "#ffffff",
@@ -159,7 +158,10 @@ function Arch_Engi() {
     fontWeight: 700,
     borderRadius: 10,
     cursor:
-      submitState.submitting || phoneAvailability.checking || phoneAvailability.exists
+      submitState.submitting ||
+      phoneAvailability.checking ||
+      phoneAvailability.exists ||
+      !otpState.isValidated
         ? "not-allowed"
         : "pointer",
     opacity: submitState.submitting ? 0.8 : 1,
@@ -390,6 +392,13 @@ function Arch_Engi() {
       return "Please validate OTP before submitting the form.";
     }
 
+    const formPhone = getFieldValue(formData, "phoneNumber");
+    if (
+      normalizePhone(formPhone) !== normalizePhone(otpState.phoneNumber)
+    ) {
+      return "Phone number changed. Please send and validate OTP again.";
+    }
+
     if (phoneAvailability.exists) {
       return "Phone number is already registered.";
     }
@@ -430,6 +439,7 @@ function Arch_Engi() {
         isSuccess: false,
       });
       setFormValidationError(validationError);
+      submitInFlightRef.current = false;
       return;
     }
 
@@ -564,14 +574,16 @@ function Arch_Engi() {
   };
 
   const handleSendOtp = async () => {
-    const phoneNumber = otpState.phoneNumber.trim();
+    const phoneNumber = otpState.phoneNumber.trim().replace(/\D/g, "");
+    const receiver =
+      phoneNumber.length >= 10 ? phoneNumber.slice(-10) : phoneNumber;
 
-    if (!phoneNumber) {
+    if (!receiver) {
       updateOtpState({ status: "Enter phone number before sending OTP." });
       return;
     }
 
-    if (!isValidIndianPhone(phoneNumber)) {
+    if (!isValidIndianPhone(receiver)) {
       updateOtpState({ status: "Phone Number must be 10 digits." });
       return;
     }
@@ -583,9 +595,11 @@ function Arch_Engi() {
     });
 
     try {
-      const response = await fetch(
-        `https://api.sksupertmt.com/api/Registration/CheckPhoneNumber?phoneNumber=${encodeURIComponent(phoneNumber)}`,
-      );
+      const response = await fetch(`${SK_BACKEND_URL}/otp/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ receiver }),
+      });
       const responseBody = (await response.json().catch(() => null)) as unknown;
 
       if (!response.ok) {
@@ -595,12 +609,14 @@ function Arch_Engi() {
         throw new Error(message);
       }
 
-      const otpMeta = extractOtpMeta(responseBody);
+      const ok = isRecord(responseBody) && responseBody.success === true;
       updateOtpState({
         checking: false,
-        txId: otpMeta.txId,
-        timeStamp: otpMeta.timeStamp,
-        status: "OTP sent. Enter the validation code.",
+        status: ok
+          ? "OTP sent. Enter the validation code."
+          : isRecord(responseBody) && typeof responseBody.message === "string"
+            ? responseBody.message
+            : "Unable to send OTP. Please try again.",
       });
     } catch (error) {
       updateOtpState({
@@ -615,6 +631,9 @@ function Arch_Engi() {
 
   const handleValidateOtp = async () => {
     const token = otpState.token.trim();
+    const phoneNumber = otpState.phoneNumber.trim().replace(/\D/g, "");
+    const receiver =
+      phoneNumber.length >= 10 ? phoneNumber.slice(-10) : phoneNumber;
 
     if (!token) {
       updateOtpState({
@@ -623,9 +642,9 @@ function Arch_Engi() {
       return;
     }
 
-    if (!otpState.txId || !otpState.timeStamp) {
+    if (!receiver) {
       updateOtpState({
-        status: "Send OTP first to get txId and timestamp.",
+        status: "Send OTP first (enter phone number and click Send OTP).",
       });
       return;
     }
@@ -633,15 +652,14 @@ function Arch_Engi() {
     updateOtpState({ validating: true, status: "Validating OTP..." });
 
     try {
-      const response = await fetch("https://sksupertmt.com/api/otp/validate", {
+      const response = await fetch(`${SK_BACKEND_URL}/otp/validate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          timeStamp: otpState.timeStamp,
-          token,
-          txId: otpState.txId,
+          receiver,
+          code: token,
         }),
       });
 
@@ -653,11 +671,13 @@ function Arch_Engi() {
         throw new Error(message);
       }
 
+      const valid = isRecord(responseBody) && responseBody.valid === true;
       updateOtpState({
         validating: false,
-        isValidated: true,
-        status:
-          extractApiMessage(responseBody) || "OTP validated successfully.",
+        isValidated: valid,
+        status: valid
+          ? "OTP validated successfully."
+          : extractApiMessage(responseBody) || "OTP validation failed.",
       });
     } catch (error) {
       updateOtpState({
@@ -1610,7 +1630,8 @@ function Arch_Engi() {
                   disabled={
                     submitState.submitting ||
                     phoneAvailability.checking ||
-                    phoneAvailability.exists
+                    phoneAvailability.exists ||
+                    !otpState.isValidated
                   }
                   style={submitButtonStyle}
                 >
@@ -1643,66 +1664,6 @@ function extractApiMessage(responseBody: unknown): string {
     (value) => typeof value === "string" && value.trim(),
   );
   return typeof message === "string" ? message : "";
-}
-
-function extractOtpMeta(responseBody: unknown): {
-  txId: string;
-  timeStamp: number;
-} {
-  if (!isRecord(responseBody)) {
-    return {
-      txId: "",
-      timeStamp: Date.now(),
-    };
-  }
-
-  const responseData = isRecord(responseBody.data) ? responseBody.data : {};
-  const responseResult = isRecord(responseBody.result)
-    ? responseBody.result
-    : {};
-
-  const txIdCandidates = [
-    responseBody.txId,
-    responseBody.TxId,
-    responseData.txId,
-    responseData.TxId,
-    responseResult.txId,
-    responseResult.TxId,
-  ];
-  const txIdValue = txIdCandidates.find(
-    (value) => typeof value === "string" && value.trim(),
-  );
-  const txId = typeof txIdValue === "string" ? txIdValue : "";
-
-  const timeStampCandidates = [
-    responseBody.timeStamp,
-    responseBody.timestamp,
-    responseBody.TimeStamp,
-    responseData.timeStamp,
-    responseData.timestamp,
-    responseResult.timeStamp,
-    responseResult.timestamp,
-  ];
-
-  const timeStampNumber = timeStampCandidates
-    .map((value) => {
-      if (typeof value === "number") {
-        return value;
-      }
-
-      if (typeof value === "string") {
-        return Number(value);
-      }
-
-      return Number.NaN;
-    })
-    .find((value) => Number.isFinite(value));
-
-  return {
-    txId,
-    timeStamp:
-      typeof timeStampNumber === "number" ? timeStampNumber : Date.now(),
-  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -180,7 +180,8 @@ function BarBendorsAndMasonsForm() {
     backgroundColor:
       submitState.submitting ||
       phoneAvailability.checking ||
-      phoneAvailability.exists
+      phoneAvailability.exists ||
+      !otpState.isValidated
         ? "#98a2b3"
         : "#d11b1b",
     color: "#ffffff",
@@ -190,7 +191,8 @@ function BarBendorsAndMasonsForm() {
     cursor:
       submitState.submitting ||
       phoneAvailability.checking ||
-      phoneAvailability.exists
+      phoneAvailability.exists ||
+      !otpState.isValidated
         ? "not-allowed"
         : "pointer",
     opacity: submitState.submitting ? 0.8 : 1,
@@ -446,6 +448,31 @@ function BarBendorsAndMasonsForm() {
       setSubmitState({
         submitting: false,
         status: "Phone number is already registered.",
+        isSuccess: false,
+      });
+      submitInFlightRef.current = false;
+      return;
+    }
+
+    if (!otpState.isValidated) {
+      setSubmitState({
+        submitting: false,
+        status: "Please validate OTP before submitting the form.",
+        isSuccess: false,
+      });
+      submitInFlightRef.current = false;
+      return;
+    }
+
+    const rawFormPhone = formData.get("phoneNumber");
+    const formPhone =
+      typeof rawFormPhone === "string" ? rawFormPhone : "";
+    if (
+      normalizePhone(formPhone) !== normalizePhone(otpState.phoneNumber)
+    ) {
+      setSubmitState({
+        submitting: false,
+        status: "Phone number changed. Please send and validate OTP again.",
         isSuccess: false,
       });
       submitInFlightRef.current = false;
@@ -1583,7 +1610,8 @@ function BarBendorsAndMasonsForm() {
                   disabled={
                     submitState.submitting ||
                     phoneAvailability.checking ||
-                    phoneAvailability.exists
+                    phoneAvailability.exists ||
+                    !otpState.isValidated
                   }
                   style={submitButtonStyle}
                 >
@@ -1616,66 +1644,6 @@ function extractApiMessage(responseBody: unknown): string {
     (value) => typeof value === "string" && value.trim(),
   );
   return typeof message === "string" ? message : "";
-}
-
-function extractOtpMeta(responseBody: unknown): {
-  txId: string;
-  timeStamp: number;
-} {
-  if (!isRecord(responseBody)) {
-    return {
-      txId: "",
-      timeStamp: Date.now(),
-    };
-  }
-
-  const responseData = isRecord(responseBody.data) ? responseBody.data : {};
-  const responseResult = isRecord(responseBody.result)
-    ? responseBody.result
-    : {};
-
-  const txIdCandidates = [
-    responseBody.txId,
-    responseBody.TxId,
-    responseData.txId,
-    responseData.TxId,
-    responseResult.txId,
-    responseResult.TxId,
-  ];
-  const txIdValue = txIdCandidates.find(
-    (value) => typeof value === "string" && value.trim(),
-  );
-  const txId = typeof txIdValue === "string" ? txIdValue : "";
-
-  const timeStampCandidates = [
-    responseBody.timeStamp,
-    responseBody.timestamp,
-    responseBody.TimeStamp,
-    responseData.timeStamp,
-    responseData.timestamp,
-    responseResult.timeStamp,
-    responseResult.timestamp,
-  ];
-
-  const timeStampNumber = timeStampCandidates
-    .map((value) => {
-      if (typeof value === "number") {
-        return value;
-      }
-
-      if (typeof value === "string") {
-        return Number(value);
-      }
-
-      return Number.NaN;
-    })
-    .find((value) => Number.isFinite(value));
-
-  return {
-    txId,
-    timeStamp:
-      typeof timeStampNumber === "number" ? timeStampNumber : Date.now(),
-  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

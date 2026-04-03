@@ -200,57 +200,85 @@ function escHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/** Physical print size for SK Passport To Progress (width × height). */
+const PASSPORT_PRINT_WIDTH_MM = 125;
+const PASSPORT_PRINT_HEIGHT_MM = 80;
+
+/** Legacy layout was 700px wide; scale to fixed print width (125mm). */
+function passportPxToMm(px: number): string {
+  return `${(px / 700) * PASSPORT_PRINT_WIDTH_MM}mm`;
+}
+
+/** Data rows in the passport text column (design px → mm via passportPxToMm). Typography must use variant="inherit" or explicit fontSize or MUI body1 (~1rem) overrides this. */
+const PASSPORT_BODY_FS = 20;
+const PASSPORT_RULER_PB = 9;
+const PASSPORT_RULER_MB = 3;
+const PASSPORT_SMALL_FS = 15;
+const PASSPORT_TITLE_FS = 25;
+const PASSPORT_TITLE_PB = 10;
+const PASSPORT_PASSPORTNO_FS = 18;
+const PASSPORT_GRID_MT = 8;
+const PASSPORT_GRID_GAP = 5;
+/** Photograph slot (physical print size). */
+const PASSPORT_PHOTO_WIDTH_MM = 35;
+const PASSPORT_PHOTO_HEIGHT_MM = 45;
+/** First grid column width (matches photo width). */
+const PASSPORT_GRID_COL1_MM = 35;
+const PASSPORT_CARD_PAD = 8;
+const PASSPORT_CHEVRON_MT = 15;
+const PASSPORT_CHEVRON_FS = 18;
+
 function buildPassportHtml(f: EditableDetail): string {
   const name = toUpperText(
     `${f.pi_firstName ?? ""} ${f.pi_lastName ?? ""}`.trim(),
   );
-  const addr1 = toUpperText(f.pi_addressLane1 ?? "—");
+  const addr1 = toUpperText(f.pi_addressLane1 ?? "");
   const addr2 = toUpperText(f.pi_addressLane2 ?? "");
-  const pincode = toUpperText(f.pi_pincode ?? "—");
-  const city = toUpperText(f.pi_city ?? "—");
-  const state = toUpperText(f.pi_state ?? "—");
-  const landmark = toUpperText(f.pi_landmark ?? "—");
+  const pincode = toUpperText(f.pi_pincode ?? "");
+  const city = toUpperText(f.pi_city ?? "");
+  const state = toUpperText(f.pi_state ?? "");
+  const landmark = toUpperText(f.pi_landmark ?? "");
   const phone = toUpperText(f.pi_phone ?? "—");
   const dob = toUpperText(formatDateToDMY(f.pi_dob));
-  const opArea = toUpperText(f.pi_city ?? "—");
-  const regBy = toUpperText(f.ref_nameOfTheperson ?? "—");
-  const passportNo = f.skPassportNo ?? "—";
+  const opArea = toUpperText(f.pi_city ?? "");
+  const regBy = toUpperText(f.ref_nameOfTheperson ?? "");
+  const passportNo = f.skPassportNo ?? "";
   const photoSrc =
     getImageSrc(f.photoProofPath as string, f.photoProofData as string) ?? "";
 
   const rulerRow = (content: string) => `
-    <div style="border-bottom:2px solid #0b0b0b;padding-bottom:5.2px;margin-bottom:4.8px">
-      <div style="font-weight:400">${content}</div>
+    <div style="border-bottom:2px solid #0b0b0b;padding-bottom:${passportPxToMm(PASSPORT_RULER_PB)};margin-bottom:${passportPxToMm(PASSPORT_RULER_MB)}">
+      <div style="font-weight:400;font-size:${passportPxToMm(PASSPORT_BODY_FS)};line-height:1.2">${content}</div>
     </div>`;
 
   const chevrons = "&lt;".repeat(27);
 
   return `
-  <div style="width:700px;max-width:100%;margin:0 auto;background-color:#D6F4FA;border:none;padding:12px;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid">
-    <div style="font-weight:400;font-size:18px;text-align:center;border-bottom:2px solid #0b0b0b;padding-bottom:6.4px;margin-bottom:4px;line-height:1.1">
+  <div style="width:${PASSPORT_PRINT_WIDTH_MM}mm;height:${PASSPORT_PRINT_HEIGHT_MM}mm;max-width:100%;margin:0 auto;background-color:#D6F4FA;border:none;padding:${passportPxToMm(PASSPORT_CARD_PAD)};box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-inside:avoid;overflow:hidden">
+    <div style="font-weight:400;font-size:${passportPxToMm(PASSPORT_TITLE_FS)};text-align:center;border-bottom:2px solid #0b0b0b;padding-bottom:${passportPxToMm(PASSPORT_TITLE_PB)};margin-bottom:${passportPxToMm(4)};line-height:1.1">
       SK SUPER TMT PASSPORT TO PROGRESS
     </div>
-    <div style="font-weight:800;font-size:16px;text-align:right;padding-right:8px">
+    <div style="font-weight:800;font-size:${passportPxToMm(PASSPORT_PASSPORTNO_FS)};text-align:right;padding-right:${passportPxToMm(8)}">
       Passport No. ${escHtml(String(passportNo))}
     </div>
-    <div style="margin-top:8px;display:grid;grid-template-columns:210px 1fr;gap:8px">
-      <img src="${escHtml(photoSrc)}" alt="Photograph" style="width:200px;height:230px;object-fit:cover;border:1px solid rgba(0,0,0,0.15);background-color:#ffffff" />
-      <div style="font-size:14px;line-height:1.35">
+    <div style="margin-top:${passportPxToMm(PASSPORT_GRID_MT)};display:grid;grid-template-columns:${PASSPORT_GRID_COL1_MM}mm 1fr;gap:${passportPxToMm(PASSPORT_GRID_GAP)}">
+      <img src="${escHtml(photoSrc)}" alt="Photograph" style="width:${PASSPORT_PHOTO_WIDTH_MM}mm;height:${PASSPORT_PHOTO_HEIGHT_MM}mm;object-fit:cover;border:1px solid rgba(0,0,0,0.15);background-color:#ffffff" />
+      <div style="font-size:${passportPxToMm(PASSPORT_BODY_FS)};line-height:1.2;min-width:0;overflow-wrap:break-word;word-break:break-word">
         ${rulerRow(`Name: ${escHtml(name)}`)}
         ${rulerRow(escHtml(addr1))}
         ${rulerRow(escHtml(addr2))}
-        ${rulerRow(`Pincode: ${escHtml(pincode)} <span>City: ${escHtml(city)}</span> <span style="margin-left:8px">State: ${escHtml(state)}</span>`)}
+        ${rulerRow(`Pincode: ${escHtml(pincode)} <span>City: ${escHtml(city)}</span> <span style="margin-left:${passportPxToMm(5)}">State: ${escHtml(state)}</span>`)}
         ${rulerRow(`Landmark: ${escHtml(landmark)}`)}
-        ${rulerRow(`Mobile Number: ${escHtml(phone)} <span style="margin-left:8px">DOB: ${escHtml(dob)}</span>`)}
-        <div style="margin-top:4.8px;display:flex;justify-content:space-between;gap:16px">
-          <div style="font-size:13px;font-weight:400">Operational Area: ${escHtml(opArea)}</div>
-          <div style="font-size:13px;font-weight:400">Reg. By: ${escHtml(regBy)}</div>
+        ${rulerRow(`Mobile Number: ${escHtml(phone)} <span style="margin-left:${passportPxToMm(5)}">DOB: ${escHtml(dob)}</span>`)}
+        <div style="margin-top:${passportPxToMm(3)};display:flex;justify-content:space-between;gap:${passportPxToMm(10)}">
+          <div style="font-size:${passportPxToMm(PASSPORT_SMALL_FS)};font-weight:400">Operational Area: ${escHtml(opArea)}</div>
+          <div style="font-size:${passportPxToMm(PASSPORT_SMALL_FS)};font-weight:400">Reg. By: ${escHtml(regBy)}</div>
         </div>
       </div>
     </div>
-    <div style="margin-top:9.6px;font-weight:900;font-family:monospace;font-size:16px;text-align:center">
-      <div style="white-space:pre;font-size:18px;letter-spacing:2px;font-weight:900">${chevrons}</div>
-      <div style="white-space:pre;font-size:18px;letter-spacing:2px;font-weight:900">${chevrons}</div>
+    <div style="margin-top:${passportPxToMm(PASSPORT_CHEVRON_MT)};font-weight:900;font-family:monospace;font-size:${passportPxToMm(PASSPORT_CHEVRON_FS)};text-align:center;line-height:1">
+      <div style="white-space:pre;font-size:${passportPxToMm(PASSPORT_CHEVRON_FS)};letter-spacing:${passportPxToMm(1.5)};font-weight:900">${chevrons}</div>
+      <div style="white-space:pre;font-size:${passportPxToMm(PASSPORT_CHEVRON_FS)};letter-spacing:${passportPxToMm(1.5)};font-weight:900">${chevrons}</div>
     </div>
   </div>`;
 }
@@ -994,18 +1022,22 @@ export default function SubmissionsPage() {
       const passportsHtml = forms
         .map(
           (f) =>
-            `<div style="page-break-inside:avoid;margin-bottom:12px">${buildPassportHtml(f)}</div>`,
+            `<div class="passport-sheet" style="page-break-inside:avoid">${buildPassportHtml(f)}</div>`,
         )
         .join("\n");
 
       const html = `<!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8" />
   <title>Bulk Passports</title>
   <style>
     @page {
-      size: A4;
-      margin: 10mm;
+      size: ${PASSPORT_PRINT_WIDTH_MM}mm ${PASSPORT_PRINT_HEIGHT_MM}mm;
+      margin: 0;
+    }
+    .passport-sheet:not(:first-child) {
+      page-break-before: always;
     }
     *, *::before, *::after { box-sizing: border-box; }
     html, body {
@@ -1029,7 +1061,9 @@ export default function SubmissionsPage() {
   </script>
 </body>
 </html>`;
-      const blob = new Blob([html], { type: "text/html" });
+      const blob = new Blob([html], {
+        type: "text/html;charset=utf-8",
+      });
       const url = URL.createObjectURL(blob);
       window.open(url, "_blank", "noopener");
       URL.revokeObjectURL(url);
@@ -4809,12 +4843,15 @@ export default function SubmissionsPage() {
                           <Box
                             id="passport-to-progress-print"
                             sx={{
-                              width: "700px",
+                              width: `${PASSPORT_PRINT_WIDTH_MM}mm`,
+                              height: `${PASSPORT_PRINT_HEIGHT_MM}mm`,
                               maxWidth: "100%",
                               mx: "auto",
                               bgcolor: "#D6F4FA",
                               border: "none",
-                              p: 1.5,
+                              p: passportPxToMm(PASSPORT_CARD_PAD),
+                              boxSizing: "border-box",
+                              overflow: "hidden",
                               WebkitPrintColorAdjust: "exact",
                               printColorAdjust: "exact",
                             }}
@@ -4822,11 +4859,11 @@ export default function SubmissionsPage() {
                             <Typography
                               sx={{
                                 fontWeight: 400,
-                                fontSize: 18,
+                                fontSize: passportPxToMm(PASSPORT_TITLE_FS),
                                 textAlign: "center",
                                 borderBottom: "2px solid #0b0b0b",
-                                pb: 0.8,
-                                mb: 0.5,
+                                pb: passportPxToMm(PASSPORT_TITLE_PB),
+                                mb: passportPxToMm(4),
                                 lineHeight: 1.1,
                               }}
                             >
@@ -4836,9 +4873,11 @@ export default function SubmissionsPage() {
                             <Typography
                               sx={{
                                 fontWeight: 800,
-                                fontSize: 16,
+                                fontSize: passportPxToMm(
+                                  PASSPORT_PASSPORTNO_FS,
+                                ),
                                 textAlign: "right",
-                                pr: 1,
+                                pr: passportPxToMm(8),
                               }}
                             >
                               Passport No. {form.skPassportNo ?? "—"}
@@ -4846,10 +4885,10 @@ export default function SubmissionsPage() {
 
                             <Box
                               sx={{
-                                mt: 1,
+                                mt: passportPxToMm(PASSPORT_GRID_MT),
                                 display: "grid",
-                                gridTemplateColumns: "210px 1fr",
-                                gap: 1,
+                                gridTemplateColumns: `${PASSPORT_GRID_COL1_MM}mm 1fr`,
+                                gap: passportPxToMm(PASSPORT_GRID_GAP),
                               }}
                             >
                               <Box
@@ -4862,24 +4901,35 @@ export default function SubmissionsPage() {
                                 }
                                 alt="Photograph"
                                 sx={{
-                                  width: "200px",
-                                  height: "230px",
+                                  width: `${PASSPORT_PHOTO_WIDTH_MM}mm`,
+                                  height: `${PASSPORT_PHOTO_HEIGHT_MM}mm`,
                                   objectFit: "cover",
                                   border: "1px solid rgba(0,0,0,0.15)",
                                   bgcolor: "#ffffff",
                                 }}
                               />
 
-                              <Box sx={{ fontSize: 14, lineHeight: 1.35 }}>
+                              <Box
+                                sx={{
+                                  fontSize: passportPxToMm(PASSPORT_BODY_FS),
+                                  lineHeight: 1.2,
+                                  minWidth: 0,
+                                  overflowWrap: "break-word",
+                                  wordBreak: "break-word",
+                                }}
+                              >
                                 {/* Ruler rows: underline touches card end by using negative horizontal margins */}
                                 <Box
                                   sx={{
                                     borderBottom: "2px solid #0b0b0b",
-                                    pb: 0.65,
-                                    mb: 0.6,
+                                    pb: passportPxToMm(PASSPORT_RULER_PB),
+                                    mb: passportPxToMm(PASSPORT_RULER_MB),
                                   }}
                                 >
-                                  <Typography sx={{ fontWeight: 400 }}>
+                                  <Typography
+                                    variant="inherit"
+                                    sx={{ fontWeight: 400 }}
+                                  >
                                     Name:{" "}
                                     {toUpperText(
                                       `${form.pi_firstName ?? ""} ${form.pi_lastName ?? ""}`.trim(),
@@ -4890,11 +4940,14 @@ export default function SubmissionsPage() {
                                 <Box
                                   sx={{
                                     borderBottom: "2px solid #0b0b0b",
-                                    pb: 0.65,
-                                    mb: 0.6,
+                                    pb: passportPxToMm(PASSPORT_RULER_PB),
+                                    mb: passportPxToMm(PASSPORT_RULER_MB),
                                   }}
                                 >
-                                  <Typography sx={{ fontWeight: 400 }}>
+                                  <Typography
+                                    variant="inherit"
+                                    sx={{ fontWeight: 400 }}
+                                  >
                                     {toUpperText(form.pi_addressLane1 ?? "—")}
                                   </Typography>
                                 </Box>
@@ -4902,11 +4955,14 @@ export default function SubmissionsPage() {
                                 <Box
                                   sx={{
                                     borderBottom: "2px solid #0b0b0b",
-                                    pb: 0.65,
-                                    mb: 0.6,
+                                    pb: passportPxToMm(PASSPORT_RULER_PB),
+                                    mb: passportPxToMm(PASSPORT_RULER_MB),
                                   }}
                                 >
-                                  <Typography sx={{ fontWeight: 400 }}>
+                                  <Typography
+                                    variant="inherit"
+                                    sx={{ fontWeight: 400 }}
+                                  >
                                     {toUpperText(form.pi_addressLane2 ?? "")}
                                   </Typography>
                                 </Box>
@@ -4914,17 +4970,24 @@ export default function SubmissionsPage() {
                                 <Box
                                   sx={{
                                     borderBottom: "2px solid #0b0b0b",
-                                    pb: 0.65,
-                                    mb: 0.6,
+                                    pb: passportPxToMm(PASSPORT_RULER_PB),
+                                    mb: passportPxToMm(PASSPORT_RULER_MB),
                                   }}
                                 >
-                                  <Typography sx={{ fontWeight: 400 }}>
+                                  <Typography
+                                    variant="inherit"
+                                    sx={{ fontWeight: 400 }}
+                                  >
                                     Pincode:{" "}
                                     {toUpperText(form.pi_pincode ?? "—")}{" "}
                                     <span>
                                       City: {toUpperText(form.pi_city ?? "—")}
                                     </span>{" "}
-                                    <span style={{ marginLeft: 8 }}>
+                                    <span
+                                      style={{
+                                        marginLeft: passportPxToMm(5),
+                                      }}
+                                    >
                                       State: {toUpperText(form.pi_state ?? "—")}
                                     </span>
                                   </Typography>
@@ -4933,11 +4996,14 @@ export default function SubmissionsPage() {
                                 <Box
                                   sx={{
                                     borderBottom: "2px solid #0b0b0b",
-                                    pb: 0.65,
-                                    mb: 0.6,
+                                    pb: passportPxToMm(PASSPORT_RULER_PB),
+                                    mb: passportPxToMm(PASSPORT_RULER_MB),
                                   }}
                                 >
-                                  <Typography sx={{ fontWeight: 400 }}>
+                                  <Typography
+                                    variant="inherit"
+                                    sx={{ fontWeight: 400 }}
+                                  >
                                     Landmark:{" "}
                                     {toUpperText(form.pi_landmark ?? "—")}
                                   </Typography>
@@ -4946,14 +5012,21 @@ export default function SubmissionsPage() {
                                 <Box
                                   sx={{
                                     borderBottom: "2px solid #0b0b0b",
-                                    pb: 0.65,
-                                    mb: 0.6,
+                                    pb: passportPxToMm(PASSPORT_RULER_PB),
+                                    mb: passportPxToMm(PASSPORT_RULER_MB),
                                   }}
                                 >
-                                  <Typography sx={{ fontWeight: 400 }}>
+                                  <Typography
+                                    variant="inherit"
+                                    sx={{ fontWeight: 400 }}
+                                  >
                                     Mobile Number:{" "}
                                     {toUpperText(form.pi_phone ?? "—")}{" "}
-                                    <span style={{ marginLeft: 8 }}>
+                                    <span
+                                      style={{
+                                        marginLeft: passportPxToMm(5),
+                                      }}
+                                    >
                                       DOB:{" "}
                                       {toUpperText(
                                         formatDateToDMY(form.pi_dob),
@@ -4965,20 +5038,28 @@ export default function SubmissionsPage() {
                                 {/* No underline for Operational Area and Reg. By (as requested) */}
                                 <Box
                                   sx={{
-                                    mt: 0.6,
+                                    mt: passportPxToMm(3),
                                     display: "flex",
                                     justifyContent: "space-between",
-                                    gap: 2,
+                                    gap: passportPxToMm(10),
                                   }}
                                 >
                                   <Typography
-                                    sx={{ fontSize: 13, fontWeight: 400 }}
+                                    sx={{
+                                      fontSize:
+                                        passportPxToMm(PASSPORT_SMALL_FS),
+                                      fontWeight: 400,
+                                    }}
                                   >
                                     Operational Area:{" "}
                                     {toUpperText(form.pi_city ?? "—")}
                                   </Typography>
                                   <Typography
-                                    sx={{ fontSize: 13, fontWeight: 400 }}
+                                    sx={{
+                                      fontSize:
+                                        passportPxToMm(PASSPORT_SMALL_FS),
+                                      fontWeight: 400,
+                                    }}
                                   >
                                     Reg. By:{" "}
                                     {toUpperText(
@@ -4991,18 +5072,19 @@ export default function SubmissionsPage() {
 
                             <Box
                               sx={{
-                                mt: 1.2,
+                                mt: passportPxToMm(PASSPORT_CHEVRON_MT),
                                 fontWeight: 900,
                                 fontFamily: "monospace",
-                                fontSize: 16,
+                                fontSize: passportPxToMm(PASSPORT_CHEVRON_FS),
                                 textAlign: "center",
+                                lineHeight: 1,
                               }}
                             >
                               <Typography
                                 sx={{
                                   whiteSpace: "pre",
-                                  fontSize: 18,
-                                  letterSpacing: 2,
+                                  fontSize: passportPxToMm(PASSPORT_CHEVRON_FS),
+                                  letterSpacing: passportPxToMm(1.5),
                                   fontWeight: 900,
                                 }}
                               >
@@ -5011,8 +5093,8 @@ export default function SubmissionsPage() {
                               <Typography
                                 sx={{
                                   whiteSpace: "pre",
-                                  fontSize: 18,
-                                  letterSpacing: 2,
+                                  fontSize: passportPxToMm(PASSPORT_CHEVRON_FS),
+                                  letterSpacing: passportPxToMm(1.5),
                                   fontWeight: 900,
                                 }}
                               >
@@ -5023,7 +5105,7 @@ export default function SubmissionsPage() {
 
                           <Box
                             sx={{
-                              width: "700px",
+                              width: `${PASSPORT_PRINT_WIDTH_MM}mm`,
                               maxWidth: "100%",
                               mx: "auto",
                               display: "flex",
@@ -5046,11 +5128,6 @@ export default function SubmissionsPage() {
                                   /[\\/:*?"<>|]/g,
                                   "_",
                                 );
-
-                                const rect = source.getBoundingClientRect();
-                                const PX_PER_MM = 3.7795275591;
-                                const wMm = Math.ceil(rect.width / PX_PER_MM);
-                                const hMm = Math.ceil(rect.height / PX_PER_MM);
 
                                 const inlineComputedStyles = (
                                   src: Element,
@@ -5101,18 +5178,19 @@ export default function SubmissionsPage() {
                                 const html = `<!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8" />
   <title>${safeFileName}</title>
   <style>
     @page {
-      size: ${wMm}mm ${hMm}mm;
+      size: ${PASSPORT_PRINT_WIDTH_MM}mm ${PASSPORT_PRINT_HEIGHT_MM}mm;
       margin: 0;
     }
     *, *::before, *::after { box-sizing: border-box; }
     html, body {
       margin: 0;
       padding: 0;
-      width: ${wMm}mm;
-      height: ${hMm}mm;
+      width: ${PASSPORT_PRINT_WIDTH_MM}mm;
+      height: ${PASSPORT_PRINT_HEIGHT_MM}mm;
       overflow: hidden;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
@@ -5133,7 +5211,7 @@ export default function SubmissionsPage() {
 </body>
 </html>`;
                                 const blob = new Blob([html], {
-                                  type: "text/html",
+                                  type: "text/html;charset=utf-8",
                                 });
                                 const url = URL.createObjectURL(blob);
                                 window.open(url, "_blank", "noopener");
