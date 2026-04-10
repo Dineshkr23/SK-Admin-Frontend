@@ -24,6 +24,7 @@ type CameraModalState = {
 type OtpVerificationState = {
   phoneNumber: string;
   token: string;
+  txId: string;
   checking: boolean;
   validating: boolean;
   isValidated: boolean;
@@ -47,6 +48,7 @@ const SK_BACKEND_URL = "https://backend.sksupertmt.com";
 const createOtpState = (): OtpVerificationState => ({
   phoneNumber: "",
   token: "",
+  txId: "",
   checking: false,
   validating: false,
   isValidated: false,
@@ -103,9 +105,9 @@ function Arch_Engi() {
   const todayDate = new Date().toISOString().split("T")[0];
   const submitInFlightRef = useRef(false);
   const phoneCheckTimerRef = useRef<number | null>(null);
-  const [cameraFacingMode, setCameraFacingMode] = useState<"environment" | "user">(
-    "environment",
-  );
+  const [cameraFacingMode, setCameraFacingMode] = useState<
+    "environment" | "user"
+  >("environment");
   const [isSameAsAbove, setIsSameAsAbove] = useState(false);
   const [whatsAppNumber, setWhatsAppNumber] = useState("");
   const [phoneAvailability, setPhoneAvailability] = useState({
@@ -181,7 +183,8 @@ function Arch_Engi() {
   const isValidIndianPhone = (value: string): boolean => /^\d{10}$/.test(value);
   const isValidIndianPincode = (value: string): boolean =>
     /^\d{6}$/.test(value);
-  const normalizePhone = (value: string): string => value.replace(/\D/g, "").slice(-10);
+  const normalizePhone = (value: string): string =>
+    value.replace(/\D/g, "").slice(-10);
   const canShowOtpControls =
     normalizePhone(otpState.phoneNumber).length === 10 &&
     !phoneAvailability.checking &&
@@ -393,9 +396,7 @@ function Arch_Engi() {
     }
 
     const formPhone = getFieldValue(formData, "phoneNumber");
-    if (
-      normalizePhone(formPhone) !== normalizePhone(otpState.phoneNumber)
-    ) {
+    if (normalizePhone(formPhone) !== normalizePhone(otpState.phoneNumber)) {
       return "Phone number changed. Please send and validate OTP again.";
     }
 
@@ -569,6 +570,7 @@ function Arch_Engi() {
       [field]: value,
       isValidated: false,
       status: "",
+      ...(field === "phoneNumber" ? { txId: "" } : {}),
     });
     setFormValidationError("");
   };
@@ -591,6 +593,7 @@ function Arch_Engi() {
     updateOtpState({
       checking: true,
       isValidated: false,
+      txId: "",
       status: "Sending OTP...",
     });
 
@@ -610,8 +613,13 @@ function Arch_Engi() {
       }
 
       const ok = isRecord(responseBody) && responseBody.success === true;
+      const txId =
+        isRecord(responseBody) && typeof responseBody.txId === "string"
+          ? responseBody.txId
+          : "";
       updateOtpState({
         checking: false,
+        txId,
         status: ok
           ? "OTP sent. Enter the validation code."
           : isRecord(responseBody) && typeof responseBody.message === "string"
@@ -631,9 +639,6 @@ function Arch_Engi() {
 
   const handleValidateOtp = async () => {
     const token = otpState.token.trim();
-    const phoneNumber = otpState.phoneNumber.trim().replace(/\D/g, "");
-    const receiver =
-      phoneNumber.length >= 10 ? phoneNumber.slice(-10) : phoneNumber;
 
     if (!token) {
       updateOtpState({
@@ -642,7 +647,7 @@ function Arch_Engi() {
       return;
     }
 
-    if (!receiver) {
+    if (!otpState.txId) {
       updateOtpState({
         status: "Send OTP first (enter phone number and click Send OTP).",
       });
@@ -658,8 +663,8 @@ function Arch_Engi() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          receiver,
-          code: token,
+          txId: otpState.txId,
+          token,
         }),
       });
 
@@ -784,9 +789,10 @@ function Arch_Engi() {
     const videoTrack = cameraStreamRef.current?.getVideoTracks()[0];
     if (videoTrack && "ImageCapture" in window) {
       try {
-        const IC = (window as unknown as Record<string, unknown>).ImageCapture as new (
-          track: MediaStreamTrack,
-        ) => { takePhoto: () => Promise<Blob> };
+        const IC = (window as unknown as Record<string, unknown>)
+          .ImageCapture as new (track: MediaStreamTrack) => {
+          takePhoto: () => Promise<Blob>;
+        };
         const ic = new IC(videoTrack);
         blob = await ic.takePhoto();
       } catch {
@@ -898,7 +904,9 @@ function Arch_Engi() {
         const response = await fetch(
           `${SK_BACKEND_URL}/form-submissions/phone-status?phone=${encodeURIComponent(normalizedPhone)}`,
         );
-        const responseBody = (await response.json().catch(() => null)) as unknown;
+        const responseBody = (await response
+          .json()
+          .catch(() => null)) as unknown;
         const exists =
           isRecord(responseBody) && typeof responseBody.exists === "boolean"
             ? responseBody.exists
@@ -949,7 +957,8 @@ function Arch_Engi() {
       }
 
       try {
-        const videoConstraints: MediaTrackConstraints & Record<string, unknown> = {
+        const videoConstraints: MediaTrackConstraints &
+          Record<string, unknown> = {
           facingMode: { ideal: cameraFacingMode },
           width: { ideal: 1920 },
           height: { ideal: 1080 },
@@ -972,10 +981,16 @@ function Arch_Engi() {
 
         const videoTrack = stream.getVideoTracks()[0];
         if (videoTrack && cameraFacingMode === "environment") {
-          const caps = (videoTrack as unknown as { getCapabilities?: () => Record<string, unknown> })
-            .getCapabilities?.();
+          const caps = (
+            videoTrack as unknown as {
+              getCapabilities?: () => Record<string, unknown>;
+            }
+          ).getCapabilities?.();
           const supportedModes = caps?.focusMode;
-          if (Array.isArray(supportedModes) && supportedModes.includes("continuous")) {
+          if (
+            Array.isArray(supportedModes) &&
+            supportedModes.includes("continuous")
+          ) {
             await videoTrack
               .applyConstraints({
                 advanced: [{ focusMode: "continuous" }],
@@ -1344,7 +1359,9 @@ function Arch_Engi() {
                 type="checkbox"
                 name="sameAsAbove"
                 checked={isSameAsAbove}
-                onChange={(event) => handleSameAsAboveChange(event.target.checked)}
+                onChange={(event) =>
+                  handleSameAsAboveChange(event.target.checked)
+                }
               />
               <span>Same as above</span>
             </label>

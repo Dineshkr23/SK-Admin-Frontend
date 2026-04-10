@@ -24,6 +24,7 @@ type CameraModalState = {
 type OtpVerificationState = {
   phoneNumber: string;
   token: string;
+  txId: string;
   checking: boolean;
   validating: boolean;
   isValidated: boolean;
@@ -47,6 +48,7 @@ type LocationState = {
 const createOtpState = (): OtpVerificationState => ({
   phoneNumber: "",
   token: "",
+  txId: "",
   checking: false,
   validating: false,
   isValidated: false,
@@ -134,9 +136,9 @@ function BarBendorsAndMasonsForm() {
   const todayDate = new Date().toISOString().split("T")[0];
   const submitInFlightRef = useRef(false);
   const phoneCheckTimerRef = useRef<number | null>(null);
-  const [cameraFacingMode, setCameraFacingMode] = useState<"environment" | "user">(
-    "environment",
-  );
+  const [cameraFacingMode, setCameraFacingMode] = useState<
+    "environment" | "user"
+  >("environment");
   const [isSameAsAbove, setIsSameAsAbove] = useState(false);
   const [whatsAppNumber, setWhatsAppNumber] = useState("");
   const [phoneAvailability, setPhoneAvailability] = useState({
@@ -465,11 +467,8 @@ function BarBendorsAndMasonsForm() {
     }
 
     const rawFormPhone = formData.get("phoneNumber");
-    const formPhone =
-      typeof rawFormPhone === "string" ? rawFormPhone : "";
-    if (
-      normalizePhone(formPhone) !== normalizePhone(otpState.phoneNumber)
-    ) {
+    const formPhone = typeof rawFormPhone === "string" ? rawFormPhone : "";
+    if (normalizePhone(formPhone) !== normalizePhone(otpState.phoneNumber)) {
       setSubmitState({
         submitting: false,
         status: "Phone number changed. Please send and validate OTP again.",
@@ -588,6 +587,7 @@ function BarBendorsAndMasonsForm() {
       [field]: value,
       isValidated: false,
       status: "",
+      ...(field === "phoneNumber" ? { txId: "" } : {}),
     });
   };
 
@@ -604,6 +604,7 @@ function BarBendorsAndMasonsForm() {
     updateOtpState({
       checking: true,
       isValidated: false,
+      txId: "",
       status: "Sending OTP...",
     });
 
@@ -623,8 +624,13 @@ function BarBendorsAndMasonsForm() {
       }
 
       const ok = isRecord(responseBody) && responseBody.success === true;
+      const txId =
+        isRecord(responseBody) && typeof responseBody.txId === "string"
+          ? responseBody.txId
+          : "";
       updateOtpState({
         checking: false,
+        txId,
         status: ok
           ? "OTP sent. Enter the validation code."
           : isRecord(responseBody) && typeof responseBody.message === "string"
@@ -644,9 +650,6 @@ function BarBendorsAndMasonsForm() {
 
   const handleValidateOtp = async () => {
     const token = otpState.token.trim();
-    const phoneNumber = otpState.phoneNumber.trim().replace(/\D/g, "");
-    const receiver =
-      phoneNumber.length >= 10 ? phoneNumber.slice(-10) : phoneNumber;
 
     if (!token) {
       updateOtpState({
@@ -655,7 +658,7 @@ function BarBendorsAndMasonsForm() {
       return;
     }
 
-    if (!receiver) {
+    if (!otpState.txId) {
       updateOtpState({
         status: "Send OTP first (enter phone number and click Send OTP).",
       });
@@ -668,7 +671,7 @@ function BarBendorsAndMasonsForm() {
       const response = await fetch(`${FORM_API_BASE}/otp/validate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ receiver, code: token }),
+        body: JSON.stringify({ txId: otpState.txId, token }),
       });
 
       const responseBody = (await response.json().catch(() => null)) as unknown;
@@ -792,9 +795,10 @@ function BarBendorsAndMasonsForm() {
     const videoTrack = cameraStreamRef.current?.getVideoTracks()[0];
     if (videoTrack && "ImageCapture" in window) {
       try {
-        const IC = (window as unknown as Record<string, unknown>).ImageCapture as new (
-          track: MediaStreamTrack,
-        ) => { takePhoto: () => Promise<Blob> };
+        const IC = (window as unknown as Record<string, unknown>)
+          .ImageCapture as new (track: MediaStreamTrack) => {
+          takePhoto: () => Promise<Blob>;
+        };
         const ic = new IC(videoTrack);
         blob = await ic.takePhoto();
       } catch {
@@ -959,7 +963,8 @@ function BarBendorsAndMasonsForm() {
       }
 
       try {
-        const videoConstraints: MediaTrackConstraints & Record<string, unknown> = {
+        const videoConstraints: MediaTrackConstraints &
+          Record<string, unknown> = {
           facingMode: { ideal: cameraFacingMode },
           width: { ideal: 1920 },
           height: { ideal: 1080 },
@@ -982,10 +987,16 @@ function BarBendorsAndMasonsForm() {
 
         const videoTrack = stream.getVideoTracks()[0];
         if (videoTrack && cameraFacingMode === "environment") {
-          const caps = (videoTrack as unknown as { getCapabilities?: () => Record<string, unknown> })
-            .getCapabilities?.();
+          const caps = (
+            videoTrack as unknown as {
+              getCapabilities?: () => Record<string, unknown>;
+            }
+          ).getCapabilities?.();
           const supportedModes = caps?.focusMode;
-          if (Array.isArray(supportedModes) && supportedModes.includes("continuous")) {
+          if (
+            Array.isArray(supportedModes) &&
+            supportedModes.includes("continuous")
+          ) {
             await videoTrack
               .applyConstraints({
                 advanced: [{ focusMode: "continuous" }],
@@ -1265,7 +1276,12 @@ function BarBendorsAndMasonsForm() {
                   >
                     {otpState.checking ? "Sending..." : "Send OTP"}
                   </button>
-                  <span style={{ fontSize: 13, fontWeight: 700 }}>
+                  <span
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                    }}
+                  >
                     (OTP for SK Customer verification)
                   </span>
                 </div>
