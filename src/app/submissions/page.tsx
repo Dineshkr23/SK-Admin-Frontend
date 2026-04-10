@@ -59,7 +59,7 @@ import {
   type TableRecord,
   type SubmissionDetail,
 } from "@/lib/api";
-import { getUserRole } from "@/lib/auth";
+import { getUserRole, type UserRole } from "@/lib/auth";
 import {
   adminColors,
   adminSectionHeaderBarStyle,
@@ -201,8 +201,8 @@ function escHtml(s: string): string {
 }
 
 /** Physical print size for SK Passport To Progress (width × height). */
-const PASSPORT_PRINT_WIDTH_MM = 125;
-const PASSPORT_PRINT_HEIGHT_MM = 80;
+const PASSPORT_PRINT_WIDTH_MM = 120;
+const PASSPORT_PRINT_HEIGHT_MM = 75;
 
 /** Legacy layout was 700px wide; scale to fixed print width (125mm). */
 function passportPxToMm(px: number): string {
@@ -441,9 +441,12 @@ const dialogGridSx = {
 } as const;
 
 export default function SubmissionsPage() {
-  const userRole = getUserRole();
+  const [userRole, setUserRole] = useState<UserRole>("ADMIN");
+  useEffect(() => {
+    setUserRole(getUserRole());
+  }, []);
   const isPriceEditor = userRole === "PRICE_EDITOR";
-  const canExportExcel = userRole === "ADMIN";
+  const canExportExcel = userRole === "ADMIN" || userRole === "DOC_MANAGER";
   const canUpdatePrice = userRole === "ADMIN" || userRole === "PRICE_EDITOR";
 
   const [rows, setRows] = useState<TableRecord[]>([]);
@@ -1182,6 +1185,13 @@ export default function SubmissionsPage() {
                 }))
               }
               onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter" && hasChange && savingRowId !== id) {
+                  e.preventDefault();
+                  saveRowField(id, { enteredBy: pending ?? "" });
+                }
+              }}
               sx={{ flex: 1, minWidth: 0 }}
               inputProps={{ style: { fontSize: 13 } }}
             />
