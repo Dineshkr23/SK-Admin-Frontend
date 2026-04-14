@@ -1022,12 +1022,19 @@ export default function SubmissionsPage() {
         selectedIds.map((id) => fetchSubmissionById(id)),
       );
       const forms = details.map((d) => toEditable(d));
-      const passportsHtml = forms
-        .map(
-          (f) =>
-            `<div class="passport-sheet" style="page-break-inside:avoid">${buildPassportHtml(f)}</div>`,
-        )
-        .join("\n");
+
+      const CARDS_PER_PAGE = 4;
+      const pages: string[] = [];
+      for (let i = 0; i < forms.length; i += CARDS_PER_PAGE) {
+        const chunk = forms.slice(i, i + CARDS_PER_PAGE);
+        const cells = chunk
+          .map(
+            (f) =>
+              `<div class="passport-cell"><div class="passport-inner">${buildPassportHtml(f)}</div></div>`,
+          )
+          .join("\n");
+        pages.push(`<div class="a4-sheet">${cells}<div class="footer-note">Print at 100% / Actual Size &mdash; do not scale or fit to page</div></div>`);
+      }
 
       const html = `<!DOCTYPE html>
 <html>
@@ -1036,11 +1043,8 @@ export default function SubmissionsPage() {
   <title>Bulk Passports</title>
   <style>
     @page {
-      size: ${PASSPORT_PRINT_WIDTH_MM}mm ${PASSPORT_PRINT_HEIGHT_MM}mm;
+      size: A4 portrait;
       margin: 0;
-    }
-    .passport-sheet:not(:first-child) {
-      page-break-before: always;
     }
     *, *::before, *::after { box-sizing: border-box; }
     html, body {
@@ -1049,10 +1053,58 @@ export default function SubmissionsPage() {
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
+    .a4-sheet {
+      width: 210mm;
+      height: 297mm;
+      padding: 8mm 10mm;
+      box-sizing: border-box;
+      display: grid;
+      grid-template-columns: ${PASSPORT_PRINT_HEIGHT_MM}mm ${PASSPORT_PRINT_HEIGHT_MM}mm;
+      grid-template-rows: ${PASSPORT_PRINT_WIDTH_MM}mm ${PASSPORT_PRINT_WIDTH_MM}mm;
+      gap: 8mm;
+      justify-content: center;
+      align-content: center;
+      page-break-after: always;
+    }
+    .a4-sheet:last-child {
+      page-break-after: auto;
+    }
+    .passport-cell {
+      width: ${PASSPORT_PRINT_HEIGHT_MM}mm;
+      height: ${PASSPORT_PRINT_WIDTH_MM}mm;
+      position: relative;
+      overflow: hidden;
+    }
+    .passport-cell::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border: 0.3mm dashed #aaa;
+      pointer-events: none;
+    }
+    .passport-inner {
+      width: ${PASSPORT_PRINT_WIDTH_MM}mm;
+      height: ${PASSPORT_PRINT_HEIGHT_MM}mm;
+      transform: rotate(90deg) translateY(-${PASSPORT_PRINT_HEIGHT_MM}mm);
+      transform-origin: top left;
+    }
+    .a4-sheet {
+      position: relative;
+    }
+    .footer-note {
+      position: absolute;
+      bottom: 2mm;
+      left: 0;
+      width: 100%;
+      text-align: center;
+      font-size: 7pt;
+      color: #999;
+      font-family: sans-serif;
+    }
   </style>
 </head>
 <body>
-  ${passportsHtml}
+  ${pages.join("\n")}
   <script>
     window.onload = function() {
       window.focus();
@@ -1107,6 +1159,10 @@ export default function SubmissionsPage() {
       }
     }
     return payload;
+  }
+
+  function isPendingLead(row: TableRecord): boolean {
+    return getRowStatus(row) === "pending";
   }
 
   const columns: GridColDef<TableRecord>[] = [
@@ -1632,7 +1688,11 @@ export default function SubmissionsPage() {
               onRowSelectionModelChange={(newModel) =>
                 setRowSelectionModel(newModel)
               }
+              getRowClassName={(params) =>
+                isPendingLead(params.row) ? "pending-lead-row" : ""
+              }
               disableRowSelectionOnClick
+              keepNonExistentRowsSelected
               sx={{
                 flex: 1,
                 minHeight: 0,
@@ -1649,6 +1709,20 @@ export default function SubmissionsPage() {
                 },
                 "& .MuiDataGrid-row": {
                   maxHeight: "none !important",
+                },
+                "& .MuiDataGrid-row.pending-lead-row": {
+                  borderLeft: "4px solid",
+                  borderLeftColor: "rgb(255, 224, 0)",
+                  backgroundColor: "rgba(255, 230, 101, 0.22)",
+                },
+                "& .MuiDataGrid-row.pending-lead-row:hover": {
+                  backgroundColor: "rgba(255, 224, 0, 0.28)",
+                },
+                "& .MuiDataGrid-row.pending-lead-row.Mui-selected": {
+                  backgroundColor: "rgba(255, 224, 0, 0.36)",
+                },
+                "& .MuiDataGrid-row.pending-lead-row.Mui-selected:hover": {
+                  backgroundColor: "rgba(255, 224, 0, 0.44)",
                 },
                 "& .MuiDataGrid-cellCheckbox, & .MuiDataGrid-columnHeaderCheckbox":
                   {
