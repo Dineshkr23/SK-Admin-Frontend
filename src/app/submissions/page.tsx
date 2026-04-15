@@ -201,8 +201,8 @@ function escHtml(s: string): string {
 }
 
 /** Physical print size for SK Passport To Progress (width × height). */
-const PASSPORT_PRINT_WIDTH_MM = 120;
-const PASSPORT_PRINT_HEIGHT_MM = 75;
+const PASSPORT_PRINT_WIDTH_MM = 135;
+const PASSPORT_PRINT_HEIGHT_MM = 85;
 
 /** Legacy layout was 700px wide; scale to fixed print width (125mm). */
 function passportPxToMm(px: number): string {
@@ -1033,7 +1033,9 @@ export default function SubmissionsPage() {
               `<div class="passport-cell"><div class="passport-inner">${buildPassportHtml(f)}</div></div>`,
           )
           .join("\n");
-        pages.push(`<div class="a4-sheet">${cells}<div class="footer-note">Print at 100% / Actual Size &mdash; do not scale or fit to page</div></div>`);
+        pages.push(
+          `<div class="a4-sheet">${cells}<div class="footer-note">Print at 100% / Actual Size &mdash; do not scale or fit to page</div></div>`,
+        );
       }
 
       const html = `<!DOCTYPE html>
